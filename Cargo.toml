@@ -18,7 +18,8 @@ members = [
   "risc0/zkvm/platform",
 ]
 exclude = [
-  "tools/crates-validator"
+  "tools/crates-validator",
+  "tools/afl-fuzzing",
 ]
 
 [workspace.package]
