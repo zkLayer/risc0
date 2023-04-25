@@ -46,6 +46,10 @@ pub enum CommonErr {
     /// Failure to deserialize the inner data
     #[error("bincode failed to deserialize inner type")]
     BincodeErr(#[from] Box<bincode::ErrorKind>),
+
+    /// Metadata is invalid, or missing required keys
+    #[error("Metadata was constructed with invalid key/value pairs")]
+    BadMetadata,
 }
 
 /// Types of supported hashes in the zkvm
@@ -76,13 +80,40 @@ impl ToString for Hashes {
     }
 }
 
+impl Default for Hashes {
+    fn default() -> Self {
+        Self::Sha256 // Default hashing scheme
+    }
+}
+
 /// Risc Zero metadata for the [Envelope]
 #[derive(Deserialize, Serialize)]
 pub struct MetaData(pub HashMap<String, String>);
 
 impl MetaData {
+    fn hash_from_prover_env() -> Hashes {
+        let mut res = Hashes::default();
+
+        let r0_prover = std::env::var("RISC0_PROVER");
+        let r0_prover = if let Ok(prover_var) = r0_prover {
+            prover_var
+        } else {
+            return res;
+        };
+
+        let splits: Vec<&str> = r0_prover.split(':').collect();
+        if splits.len() < 2 {
+            return res;
+        }
+        let hash_str = splits[1];
+
+        res = Hashes::from_str(hash_str)
+            .unwrap_or_else(|_| panic!("Invalid hash string in RISC0_PROVER env var: {hash_str}"));
+        res
+    }
+
     /// Construct [MetaData] from a [Hashes] selection
-    pub fn from(hash: Hashes) -> Self {
+    pub fn from_env() -> Self {
         let mut inner: HashMap<String, String> = HashMap::new();
         inner.insert(
             ZKVM_CIRCUIT_VER.to_string(),
@@ -92,8 +123,27 @@ impl MetaData {
             ZKVM_PLATFORM_VER.to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
         );
+
+        let hash = Self::hash_from_prover_env();
+
         inner.insert(ZKVM_PROVER_HASH.to_string(), hash.to_string());
         Self(inner)
+    }
+
+    /// Construct [MetaData] from supplied key values
+    pub fn from_user(values: &[(&str, &str)]) -> Result<Self, CommonErr> {
+        let mut inner = HashMap::new();
+        for (key, val) in values {
+            inner.insert(key.to_string(), val.to_string());
+        }
+
+        let res = Self(inner);
+
+        if !res.valid() {
+            return Err(CommonErr::BadMetadata);
+        }
+
+        Ok(res)
     }
 
     /// Check if this [MetaData] has the required keys
@@ -135,16 +185,6 @@ impl MetaData {
     /// Helper to access ZKVM_PROVER_HASH
     pub fn zkvm_prover_hash(&self) -> &str {
         self.0.get(ZKVM_PROVER_HASH).unwrap()
-    }
-}
-
-impl FromStr for MetaData {
-    type Err = CommonErr;
-    /// Construct [MetaData] from a hash String selection
-    fn from_str(s: &str) -> Result<Self, CommonErr> {
-        // Validate the requested hash
-        let hash = Hashes::from_str(s)?;
-        Ok(Self::from(hash))
     }
 }
 
@@ -216,23 +256,14 @@ pub mod conversion {
     declare_tryfrom_deserial!(SegmentReceipt);
     declare_tryfrom_deserial!(SessionReceipt);
 
-    /// Construct [Envelope] with user supplied prover hash functions
-    pub trait TryFromHash<T> {
-        /// Perform the conversion
-        fn try_from_hash(value: T, hash: &str) -> Result<Envelope, CommonErr>;
-    }
-
     // TryFrom Serialization methods
     macro_rules! declare_tryfrom_serialize {
         ($name:ident) => {
-            impl TryFromHash<$name> for Envelope {
-                fn try_from_hash(value: $name, hash: &str) -> Result<Self, CommonErr> {
-                    // TODO: Should we just parse the `RISC0_PROVER` used in Prover
-                    // then extract that hash function string from there?
-                    // That would allow us to use the standard TryFrom Trait type.
-                    let metadata = hash.parse::<MetaData>()?;
+            impl TryFrom<$name> for Envelope {
+                type Error = CommonErr;
+                fn try_from(value: $name) -> Result<Self, Self::Error> {
                     Ok(Self {
-                        metadata,
+                        metadata: MetaData::from_env(),
                         body_type: BodyType::$name,
                         body: bincode::serialize(&value)?,
                     })
@@ -254,24 +285,30 @@ mod tests {
 
     #[test]
     fn metadata_simple() {
-        let metadata = MetaData::from(Hashes::Sha256);
+        let metadata = MetaData::from_env();
         assert_eq!(metadata.zkvm_prover_hash(), "sha256");
         assert_eq!(metadata.zkvm_circuit_version(), env!("CARGO_PKG_VERSION"));
         assert_eq!(metadata.zkvm_platform_version(), env!("CARGO_PKG_VERSION"));
     }
 
     #[test]
-    fn metadata_from_str() {
-        let metadata = "sha256".parse::<MetaData>().unwrap();
+    fn metadata_from_user() {
+        let values = [
+            (ZKVM_PLATFORM_VER, "0.1"),
+            (ZKVM_CIRCUIT_VER, "0.1"),
+            (ZKVM_PROVER_HASH, "sha256"),
+        ];
+        let metadata = MetaData::from_user(&values).unwrap();
         assert_eq!(metadata.zkvm_prover_hash(), "sha256");
 
-        let metadata = "poseidon".parse::<MetaData>().unwrap();
-        assert_eq!(metadata.zkvm_prover_hash(), "poseidon");
+        let values = [(ZKVM_PLATFORM_VER, "0.1"), (ZKVM_CIRCUIT_VER, "0.1")];
+        let metadata = MetaData::from_user(&values);
+        assert!(metadata.is_err())
     }
 
     #[test]
     fn metadata_valid() {
-        let mut metadata = MetaData::from(Hashes::Sha256);
+        let mut metadata = MetaData::from_env();
         assert!(metadata.valid());
 
         metadata.0.insert("TEST_KEY".into(), "TEST_VALUE".into());
@@ -283,14 +320,14 @@ mod tests {
 
     #[test]
     fn metadata_compatible() {
-        let mut metadata = MetaData::from(Hashes::Poseidon);
+        let mut metadata = MetaData::from_env();
         let cargo_ver = env!("CARGO_PKG_VERSION");
 
         // Only base keys
         let values = [
             (ZKVM_CIRCUIT_VER, cargo_ver),
             (ZKVM_PLATFORM_VER, cargo_ver),
-            (ZKVM_PROVER_HASH, &Hashes::Poseidon.to_string()),
+            (ZKVM_PROVER_HASH, &Hashes::default().to_string()),
         ];
         assert!(metadata.compatible(&values));
 
@@ -305,7 +342,7 @@ mod tests {
         let values = [
             (ZKVM_CIRCUIT_VER, cargo_ver),
             (ZKVM_PLATFORM_VER, cargo_ver),
-            (ZKVM_PROVER_HASH, &Hashes::Poseidon.to_string()),
+            (ZKVM_PROVER_HASH, &Hashes::default().to_string()),
             ("TEST_KEY", "TEST_VAL"),
         ];
         assert!(!metadata.compatible(&values));
@@ -319,14 +356,12 @@ mod tests {
     fn envelope_simple() {
         use risc0_zkvm::SessionReceipt;
 
-        use crate::conversion::TryFromHash;
-
         let session_receipt = SessionReceipt {
             journal: vec![],
             segments: vec![],
         };
 
-        let envelope = Envelope::try_from_hash(session_receipt, "sha256").unwrap();
+        let envelope = Envelope::try_from(session_receipt).unwrap();
         assert_eq!(envelope.body.len(), 16);
         assert_eq!(envelope.body_type, BodyType::SessionReceipt);
         assert!(envelope.metadata.valid());
