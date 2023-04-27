@@ -25,6 +25,7 @@ bytemuck = "1.12"
 cfg-if = "1.0"
 getrandom = { version = "0.2", features = ["custom"] }
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+num-traits = { version = "0.2", default-features = false, optional = true }
 risc0-circuit-rv32im = { workspace = true }
 risc0-core = { workspace = true }
 risc0-zkp = { workspace = true }
@@ -46,7 +47,6 @@ lazy-regex = { version = "2.3", optional = true }
 log = "0.4"
 num-bigint = { version = "0.4.3", default-features = false, features = ["rand"], optional = true }
 num-derive = "0.3"
-num-traits = { version = "0.2", default-features = false }
 prost = { version = "0.11", optional = true }
 rand = { version = "0.8", optional = true }
 rayon = { version = "1.5", optional = true }
@@ -72,8 +72,11 @@ test-log = { version = "0.2", features = ["trace"] }
 binfmt = ["dep:elf", "std"]
 cuda = ["risc0-circuit-rv32im/cuda", "risc0-zkp/cuda"]
 metal = ["risc0-circuit-rv32im/metal", "risc0-zkp/metal"]
-default = ["prove"]
+default = ["bigint", "prove"]
 dual = []
+bigint = [
+  "dep:num-traits",
+]
 profiler = [
   "dep:addr2line",
   "dep:gimli",
@@ -86,6 +89,7 @@ prove = [
   "dep:generic-array",
   "dep:getrandom",
   "dep:lazy-regex",
+  "dep:num-traits",
   "dep:num-bigint",
   "dep:rand",
   "dep:rayon",
@@ -97,7 +101,7 @@ prove = [
 ]
 std = [
   "anyhow/std",
-  "num-traits/std",
+  "num-traits?/std",
   "risc0-circuit-rv32im/std",
   "risc0-zkp/std",
   "serde/std",
