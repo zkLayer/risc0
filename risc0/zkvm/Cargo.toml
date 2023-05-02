@@ -26,12 +26,14 @@ cfg-if = "1.0"
 getrandom = { version = "0.2", features = ["custom"] }
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 num-traits = { version = "0.2", default-features = false, optional = true }
+typenum = { version = "1.16", features = ["no_std"], optional = true }
 risc0-circuit-rv32im = { workspace = true }
 risc0-core = { workspace = true }
 risc0-zkp = { workspace = true }
 risc0-zkvm-platform = { workspace = true }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 tracing = { version = "0.1", default-features = false, features = ["attributes"] }
+generic-array = "0.14"
 
 # TODO(nils): Change these `target_os` checks to `target_vendor` checks when we
 # have a real target triple.
@@ -76,6 +78,7 @@ default = ["bigint", "prove"]
 dual = []
 bigint = [
   "dep:num-traits",
+  "dep:typenum",
 ]
 profiler = [
   "dep:addr2line",

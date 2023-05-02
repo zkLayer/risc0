@@ -20,6 +20,8 @@
 
 extern crate alloc;
 
+#[cfg(feature = "bigint")]
+pub mod bigint;
 #[cfg(feature = "binfmt")]
 pub mod binfmt;
 mod control_id;

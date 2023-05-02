@@ -58,8 +58,6 @@
 #![deny(missing_docs)]
 
 mod alloc;
-#[cfg(feature = "bigint")]
-pub mod bigint;
 pub mod env;
 pub mod sha;
 
