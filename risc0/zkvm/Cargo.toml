@@ -25,15 +25,14 @@ bytemuck = "1.12"
 cfg-if = "1.0"
 getrandom = { version = "0.2", features = ["custom"] }
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+generic-array = { version = "0.14", default-features = false, optional = true }
 num-traits = { version = "0.2", default-features = false, optional = true }
-typenum = { version = "1.16", features = ["no_std"], optional = true }
 risc0-circuit-rv32im = { workspace = true }
 risc0-core = { workspace = true }
 risc0-zkp = { workspace = true }
 risc0-zkvm-platform = { workspace = true }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 tracing = { version = "0.1", default-features = false, features = ["attributes"] }
-generic-array = "0.14"
 
 # TODO(nils): Change these `target_os` checks to `target_vendor` checks when we
 # have a real target triple.
@@ -42,7 +41,6 @@ generic-array = "0.14"
 [target.'cfg(not(target_os = "zkvm"))'.dependencies]
 addr2line = { version = "0.20", optional = true }
 elf = { version = "0.7", optional = true }
-generic-array = { version = "0.14", default-features = false, optional = true }
 getrandom = { version = "0.2", optional = true }
 gimli = { version = "0.27", optional = true }
 lazy-regex = { version = "2.3", optional = true }
@@ -78,7 +76,6 @@ default = ["bigint", "prove"]
 dual = []
 bigint = [
   "dep:num-traits",
-  "dep:typenum",
 ]
 profiler = [
   "dep:addr2line",

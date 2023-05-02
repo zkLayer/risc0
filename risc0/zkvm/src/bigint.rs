@@ -21,10 +21,8 @@ use core::{
     ops::{Add, Sub},
 };
 
-use generic_array::{sequence::Lengthen, ArrayLength, GenericArray};
 use num_traits::{One, Zero};
 use risc0_zkvm_platform::syscall::{bigint, sys_bigint};
-use typenum::{Add1, Unsigned, B1, U0, U8};
 
 // TODO(victor): Is there a better name for this type?
 /// Fixed-width big integer supporting arithmetic including modular
@@ -89,55 +87,6 @@ impl<N: Modulus> From<[u32; bigint::WIDTH_WORDS]> for Residue<N> {
         Self(arr.into(), PhantomData)
     }
 }
-
-// Alternative implementation of constant modulus. More generic, but also more
-// complicated
-//
-// TODO(victor): Docs
-// pub trait Token {
-// TODO(victor): Docs
-// type Depth: ArrayLength<u32> + Add<B1>;
-//
-// TODO(victor): Docs
-// const DEPTH: usize = Self::Depth::USIZE;
-//
-// TODO(victor): Docs
-// fn arr() -> GenericArray<u32, Self::Depth>;
-// }
-//
-// TODO(victor): Docs
-// pub struct Nil;
-//
-// impl Token for Nil {
-// type Depth = U0;
-//
-// fn arr() -> GenericArray<u32, Self::Depth> {
-// generic_array::arr![u32;]
-// }
-// }
-//
-// TODO(victor): Docs
-// pub struct Num<T: Token, const N: u32>(PhantomData<T>);
-//
-// impl<T: Token, const N: u32> Token for Num<T, N>
-// where
-// Add1<T::Depth>: ArrayLength<u32> + Add<B1> + Sub<B1, Output = T::Depth>,
-// {
-// type Depth = Add1<T::Depth>;
-//
-// fn arr() -> GenericArray<u32, Self::Depth> {
-// <T as Token>::arr().prepend(N)
-// }
-// }
-//
-// TODO(victor): Docs
-// pub type UWidth = U8;
-//
-// impl<T: Token<Depth = UWidth>> From<T> for BigInt {
-// fn from(_: T) -> Self {
-// Self(T::arr().into())
-// }
-// }
 
 struct ModulusTypeArr<
     const N0: u32,
