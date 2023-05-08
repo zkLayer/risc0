@@ -16,7 +16,7 @@ use std::{collections::BTreeMap, io::Cursor, str::from_utf8, sync::Mutex};
 
 use risc0_zkvm_methods::{
     multi_test::{MultiTestSpec, SYS_MULTI_TEST},
-    HELLO_COMMIT_ELF, MULTI_TEST_ELF, SLICE_IO_ELF, STANDARD_LIB_ELF,
+    HELLO_COMMIT_ELF, MULTI_TEST_ELF, RUST_CRYPTO_BIGINT_ELF, SLICE_IO_ELF, STANDARD_LIB_ELF,
 };
 use risc0_zkvm_platform::{fileno, PAGE_SIZE, WORD_SIZE};
 use test_log::test;
@@ -171,6 +171,12 @@ fn bigint_accel() {
             bytemuck::cast_slice(case.expected().as_slice())
         );
     }
+}
+
+#[test]
+fn rust_crypto_bigint_interface() {
+    let mut exec = Executor::from_elf(ExecutorEnv::default(), RUST_CRYPTO_BIGINT_ELF).unwrap();
+    exec.run().unwrap();
 }
 
 #[test]

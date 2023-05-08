@@ -22,7 +22,9 @@ use risc0_zkp::{
     hal::cpu::CpuHal,
     verify::VerificationError,
 };
-use risc0_zkvm_methods::{multi_test::MultiTestSpec, MULTI_TEST_ELF, MULTI_TEST_ID};
+use risc0_zkvm_methods::{
+    multi_test::MultiTestSpec, MULTI_TEST_ELF, MULTI_TEST_ID, RUST_CRYPTO_BIGINT_ELF,
+};
 use risc0_zkvm_platform::memory::HEAP;
 use serial_test::serial;
 use test_log::test;
@@ -141,6 +143,12 @@ fn bigint_accel() {
             bytemuck::cast_slice(case.expected().as_slice())
         );
     }
+}
+
+#[test]
+fn rust_crypto_bigint_interface() {
+    let mut exec = Executor::from_elf(ExecutorEnv::default(), RUST_CRYPTO_BIGINT_ELF).unwrap();
+    exec.run().unwrap();
 }
 
 #[test]
