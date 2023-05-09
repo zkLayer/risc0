@@ -15,7 +15,11 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
 
+extern crate alloc;
+
 pub mod bench;
+#[cfg(not(target_os = "zkvm"))]
+pub mod bigint;
 pub mod multi_test;
 
 #[cfg(not(target_os = "zkvm"))]

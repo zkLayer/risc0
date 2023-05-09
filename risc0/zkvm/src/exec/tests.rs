@@ -14,6 +14,8 @@
 
 use std::{collections::BTreeMap, io::Cursor, str::from_utf8, sync::Mutex};
 
+use rand::Rng;
+use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use risc0_zkvm_methods::{
     multi_test::{MultiTestSpec, SYS_MULTI_TEST},
     HELLO_COMMIT_ELF, MULTI_TEST_ELF, RUST_CRYPTO_BIGINT_ELF, SLICE_IO_ELF, STANDARD_LIB_ELF,
@@ -24,7 +26,7 @@ use test_log::test;
 use super::{Executor, ExecutorEnv, TraceEvent};
 use crate::{
     serde::{from_slice, to_vec},
-    testutils, ExitCode, MemoryImage, Program,
+    ExitCode, MemoryImage, Program,
 };
 
 #[test]
@@ -153,24 +155,17 @@ fn sha_accel() {
 
 #[test]
 fn bigint_accel() {
-    let cases = testutils::generate_bigint_test_cases(&mut rand::thread_rng(), 10);
-    for case in cases {
-        println!("Running BigInt circuit test case: {:x?}", case);
-        let input = to_vec(&MultiTestSpec::BigInt {
-            x: case.x,
-            y: case.y,
-            modulus: case.modulus,
-        })
-        .unwrap();
+    let seed: <ChaCha8Rng as SeedableRng>::Seed = rand::thread_rng().gen();
+    println!("USE THIS SEED TO RERUN THE SAME TESTS: {:x?}", seed);
+    let cases = risc0_zkvm_methods::bigint::generate_bigint_test_cases(
+        &mut ChaCha8Rng::from_seed(seed),
+        100,
+    );
+    let input = to_vec(&MultiTestSpec::BigInt { cases }).unwrap();
 
-        let env = ExecutorEnv::builder().add_input(&input).build();
-        let mut exec = Executor::from_elf(env, MULTI_TEST_ELF).unwrap();
-        let session = exec.run().unwrap();
-        assert_eq!(
-            session.journal.as_slice(),
-            bytemuck::cast_slice(case.expected().as_slice())
-        );
-    }
+    let env = ExecutorEnv::builder().add_input(&input).build();
+    let mut exec = Executor::from_elf(env, MULTI_TEST_ELF).unwrap();
+    exec.run().unwrap();
 }
 
 #[test]

@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::{vec, vec::Vec};
 use core::mem;
 
 use crypto_bigint::{
-    rand_core::CryptoRngCore, CheckedMul, Encoding, NonZero, Random, RandomMod, U256, U512,
+    rand_core::CryptoRngCore, CheckedMul, Encoding, NonZero, Random, RandomMod, U256,
 };
 use risc0_zkvm_platform::syscall::bigint;
+
+use crate::multi_test::BigIntTestCase;
 
 // Convert to little-endian u32 array. Only reinterprettation on LE machines.
 fn bigint_to_arr(num: &U256) -> [u32; bigint::WIDTH_WORDS] {
@@ -36,28 +39,32 @@ fn arr_to_bigint(mut arr: [u32; bigint::WIDTH_WORDS]) -> U256 {
     U256::from_le_bytes(bytemuck::cast(arr))
 }
 
-#[derive(Debug)]
-pub struct BigIntTestCase {
-    pub x: [u32; bigint::WIDTH_WORDS],
-    pub y: [u32; bigint::WIDTH_WORDS],
-    pub modulus: [u32; bigint::WIDTH_WORDS],
-}
-
 impl BigIntTestCase {
-    pub fn expected(&self) -> [u32; bigint::WIDTH_WORDS] {
-        // Load inputs.
-        let x = arr_to_bigint(self.x);
-        let y = arr_to_bigint(self.y);
-        let n = arr_to_bigint(self.modulus);
+    pub fn new(
+        x: [u32; bigint::WIDTH_WORDS],
+        y: [u32; bigint::WIDTH_WORDS],
+        modulus: [u32; bigint::WIDTH_WORDS],
+    ) -> Self {
+        Self {
+            x,
+            y,
+            modulus,
+            expected: Self::expected(
+                &arr_to_bigint(x),
+                &arr_to_bigint(y),
+                &arr_to_bigint(modulus),
+            ),
+        }
+    }
 
+    pub fn expected(x: &U256, y: &U256, n: &U256) -> [u32; bigint::WIDTH_WORDS] {
         // Compute modular multiplication, or simply multiplication if n == 0.
-        let z: U256 = if n == U256::ZERO {
+        let z: U256 = if n == &U256::ZERO {
             x.checked_mul(&y).unwrap()
         } else {
-            let (w_lo, w_hi) = x.mul_wide(&y);
-            let w = w_hi.concat(&w_lo);
-            let z = w.rem(&NonZero::<U512>::from_uint(n.resize()));
-            z.resize()
+            let (z, valid) = U256::const_rem_wide(x.mul_wide(&y), &n);
+            assert!(bool::from(valid));
+            z
         };
 
         bigint_to_arr(&z)
@@ -78,10 +85,11 @@ impl BigIntTestCase {
             mem::swap(&mut x, &mut y);
         }
 
-        BigIntTestCase {
+        Self {
             x: bigint_to_arr(&x),
             y: bigint_to_arr(&y),
             modulus: bigint_to_arr(modulus.as_ref()),
+            expected: Self::expected(&x, &y, modulus.as_ref()),
         }
     }
 }
@@ -96,31 +104,27 @@ pub fn generate_bigint_test_cases(
     let one = [1, 0, 0, 0, 0, 0, 0, 0];
 
     let mut cases = vec![
-        BigIntTestCase {
-            x: [1, 2, 3, 4, 5, 6, 7, 8],
-            y: [9, 10, 11, 12, 13, 14, 15, 16],
-            modulus: [17, 18, 19, 20, 21, 22, 23, 24],
-        },
-        BigIntTestCase {
-            x: [1, 2, 3, 4, 5, 6, 7, 8],
-            y: zero,
-            modulus: [17, 18, 19, 20, 21, 22, 23, 24],
-        },
-        BigIntTestCase {
-            x: [1, 2, 3, 4, 5, 6, 7, 8],
-            y: one,
-            modulus: [17, 18, 19, 20, 21, 22, 23, 24],
-        },
-        BigIntTestCase {
-            x: one,
-            y: [9, 10, 11, 12, 13, 14, 15, 16],
-            modulus: [1, 2, 3, 4, 5, 6, 7, 8],
-        },
-        BigIntTestCase {
-            x: [1, 2, 3, 4, 0, 0, 0, 0],
-            y: [9, 10, 11, 12, 0, 0, 0, 0],
-            modulus: zero,
-        },
+        BigIntTestCase::new(
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            [9, 10, 11, 12, 13, 14, 15, 16],
+            [17, 18, 19, 20, 21, 22, 23, 24],
+        ),
+        BigIntTestCase::new(
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            zero,
+            [17, 18, 19, 20, 21, 22, 23, 24],
+        ),
+        BigIntTestCase::new(
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            one,
+            [17, 18, 19, 20, 21, 22, 23, 24],
+        ),
+        BigIntTestCase::new(
+            one,
+            [9, 10, 11, 12, 13, 14, 15, 16],
+            [1, 2, 3, 4, 5, 6, 7, 8],
+        ),
+        BigIntTestCase::new([1, 2, 3, 4, 0, 0, 0, 0], [9, 10, 11, 12, 0, 0, 0, 0], zero),
     ];
 
     cases.extend((0..rand_count).map(|_| BigIntTestCase::sample(rng)));

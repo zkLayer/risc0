@@ -21,6 +21,14 @@ use risc0_zkvm::declare_syscall;
 use risc0_zkvm_platform::syscall::bigint;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BigIntTestCase {
+    pub x: [u32; bigint::WIDTH_WORDS],
+    pub y: [u32; bigint::WIDTH_WORDS],
+    pub modulus: [u32; bigint::WIDTH_WORDS],
+    pub expected: [u32; bigint::WIDTH_WORDS],
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MultiTestSpec {
     DoNothing,
@@ -52,9 +60,7 @@ pub enum MultiTestSpec {
         pos_and_len: Vec<(u32, u32)>,
     },
     BigInt {
-        x: [u32; bigint::WIDTH_WORDS],
-        y: [u32; bigint::WIDTH_WORDS],
-        modulus: [u32; bigint::WIDTH_WORDS],
+        cases: Vec<BigIntTestCase>,
     },
     PauseContinue,
     BusyLoop {

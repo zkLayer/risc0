@@ -27,7 +27,7 @@ use risc0_zkvm::{
     guest::{env, memory_barrier, sha},
     sha::{Digest, Sha256},
 };
-use risc0_zkvm_methods::multi_test::{MultiTestSpec, SYS_MULTI_TEST};
+use risc0_zkvm_methods::multi_test::{BigIntTestCase, MultiTestSpec, SYS_MULTI_TEST};
 use risc0_zkvm_platform::{
     fileno,
     syscall::{bigint, sys_bigint, sys_read, sys_write},
@@ -179,12 +179,20 @@ pub fn main() {
             }
             env::log("Busy loop complete");
         }
-        MultiTestSpec::BigInt { x, y, modulus } => {
-            let mut result = [0u32; bigint::WIDTH_WORDS];
-            unsafe {
-                sys_bigint(&mut result, bigint::OP_MULTIPLY, &x, &y, &modulus);
+        MultiTestSpec::BigInt { cases } => {
+            for BigIntTestCase {
+                x,
+                y,
+                modulus,
+                expected,
+            } in cases
+            {
+                let mut result = [0u32; bigint::WIDTH_WORDS];
+                unsafe {
+                    sys_bigint(&mut result, bigint::OP_MULTIPLY, &x, &y, &modulus);
+                }
+                assert_eq!(result, expected);
             }
-            env::commit_slice(&result);
         }
         MultiTestSpec::LibM => {
             use core::hint::black_box;
