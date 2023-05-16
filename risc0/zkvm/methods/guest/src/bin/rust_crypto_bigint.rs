@@ -23,14 +23,31 @@ risc0_zkvm::entry!(main);
 // DO NOT MERGE(victor): Include proper attribution.
 
 impl_modulus!(
-    Modulus,
+    InvModulus,
+    U256,
+    "15477BCCEFE197328255BFA79A1217899016D927EF460F4FF404029D24FA4409"
+);
+
+fn test_self_inverse() {
+    let x = U256::from_be_hex("77117F1273373C26C700D076B3F780074D03339F56DD0EFB60E7F58441FD3685");
+    let x_mod = const_residue!(x, InvModulus);
+
+    let (inv, is_some) = x_mod.invert();
+    assert!(bool::from(is_some));
+    let res = &x_mod * &inv;
+
+    assert_eq!(res.retrieve(), U256::ONE);
+}
+
+impl_modulus!(
+    PowModulus,
     U256,
     "9CC24C5DF431A864188AB905AC751B727C9447A8E99E6366E1AD78A21E8D882B"
 );
 
 fn test_powmod_small_base() {
     let base = U256::from(105u64);
-    let base_mod = const_residue!(base, Modulus);
+    let base_mod = const_residue!(base, PowModulus);
 
     let exponent =
         U256::from_be_hex("77117F1273373C26C700D076B3F780074D03339F56DD0EFB60E7F58441FD3685");
@@ -45,7 +62,7 @@ fn test_powmod_small_base() {
 fn test_powmod_small_exponent() {
     let base =
         U256::from_be_hex("3435D18AA8313EBBE4D20002922225B53F75DC4453BB3EEC0378646F79B524A4");
-    let base_mod = const_residue!(base, Modulus);
+    let base_mod = const_residue!(base, PowModulus);
 
     let exponent = U256::from(105u64);
 
@@ -59,7 +76,7 @@ fn test_powmod_small_exponent() {
 fn test_powmod() {
     let base =
         U256::from_be_hex("3435D18AA8313EBBE4D20002922225B53F75DC4453BB3EEC0378646F79B524A4");
-    let base_mod = const_residue!(base, Modulus);
+    let base_mod = const_residue!(base, PowModulus);
 
     let exponent =
         U256::from_be_hex("77117F1273373C26C700D076B3F780074D03339F56DD0EFB60E7F58441FD3685");
@@ -72,6 +89,7 @@ fn test_powmod() {
 }
 
 pub fn main() {
+    test_self_inverse();
     test_powmod_small_base();
     test_powmod_small_exponent();
     test_powmod();
