@@ -68,6 +68,7 @@ pub enum MultiTestSpec {
         cycles: u32,
     },
     LibM,
+    Oom,
 }
 
 declare_syscall!(pub SYS_MULTI_TEST);
