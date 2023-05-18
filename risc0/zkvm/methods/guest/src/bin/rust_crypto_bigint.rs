@@ -15,7 +15,9 @@
 #![no_std]
 #![no_main]
 
-use crypto_bigint::{const_residue, impl_modulus, modular::constant_mod::ResidueParams, U256};
+use crypto_bigint::{
+    const_residue, impl_modulus, modular::constant_mod::ResidueParams, U128, U256,
+};
 
 risc0_zkvm::entry!(main);
 
@@ -88,9 +90,19 @@ fn test_powmod() {
     assert_eq!(res.retrieve(), expected);
 }
 
+fn test_mul_wide_u128() {
+    let a = U128::from_be_hex("1399fefa744fdbf413c5009043ffdd6d");
+    let b = U128::from_be_hex("31589d89053f599747e01723177f90f7");
+
+    let expected =
+        U256::from_be_hex("03c742cd858b2da74f346beb8f92518d26db457dc77005d164527b2c2c7ef42b");
+    assert_eq!(a.mul_wide(&b), (expected.split().1, expected.split().0));
+}
+
 pub fn main() {
     test_self_inverse();
     test_powmod_small_base();
     test_powmod_small_exponent();
     test_powmod();
+    test_mul_wide_u128();
 }
