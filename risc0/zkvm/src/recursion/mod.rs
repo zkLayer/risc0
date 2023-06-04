@@ -18,13 +18,19 @@ mod info;
 mod poly_ext;
 mod taps;
 
+#[cfg(feature = "prove")]
+mod ffi;
+#[cfg(feature = "prove")]
+mod cpp;
+
 /// todo
 pub mod receipt;
 
 /// this is a fake struct to make the code work with generated info
-struct CircuitImpl;
+pub struct CircuitImpl;
 
 impl CircuitImpl {
+    /// todo
     pub const fn new() -> Self {
         CircuitImpl
     }
@@ -36,4 +42,5 @@ impl TapsProvider for CircuitImpl {
     }
 }
 
-const CIRCUIT: CircuitImpl = CircuitImpl::new();
+/// todo
+pub const CIRCUIT: CircuitImpl = CircuitImpl::new();

@@ -21,8 +21,9 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_os = "zkvm"))]
 use crate::receipt::compute_image_id;
+#[cfg(not(target_os = "zkvm"))]
+use crate::recursion::CIRCUIT;
 use crate::{
-    recursion::CIRCUIT,
     sha::{self},
     ControlId,
 };
