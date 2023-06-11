@@ -90,6 +90,10 @@ pub struct Segment {
 
     /// The number of cycles used to execute instructions.
     pub insn_cycles: usize,
+
+    /// If configured, cycle number and program counter for each cycle executed.
+    #[cfg(feature = "cycle_count_debug")]
+    pub cycle_pc: alloc::collections::BTreeMap<u32, u32>,
 }
 
 impl Session {
@@ -139,6 +143,8 @@ impl Segment {
             po2,
             index,
             insn_cycles,
+            #[cfg(feature = "cycle_count_debug")]
+            cycle_pc: alloc::collections::BTreeMap::new(),
         }
     }
 }

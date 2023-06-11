@@ -17,13 +17,15 @@ use crate::{
     ExecutorEnv, ExitCode, SyscallContext,
 };
 /// The number of cycles required to compress a SHA-256 block.
-const SHA_CYCLES: usize = 72;
+const SHA_BLOCK_CYCLES: usize = 68;
+/// The number of cycles needed to store the result of a SHA-256 compression
+const SHA_FINI_CYCLES: usize = 5;
 
 /// Number of cycles required to complete a BigInt operation.
 const BIGINT_CYCLES: usize = 9;
 
 #[derive(Default, Debug)]
-pub struct ECallRecord {
+pub struct PendingECall {
     pub page_loads: BTreeSet<u32>,
     pub ram_writes: Vec<(u32, u32)>,
     pub reg_writes: Vec<(usize, u32)>,
@@ -35,15 +37,15 @@ pub struct ECallRecord {
 struct ECallExecutor<'a, C: SyscallContext> {
     // TODO: Make it so SyscallContext doesn't need to be mut
     ctx: &'a C,
-    exec: ECallRecord,
+    exec: PendingECall,
 }
 
-pub fn exec_ecall(ctx: &impl SyscallContext, env: &ExecutorEnv) -> Result<ECallRecord> {
+pub fn exec_ecall(ctx: &impl SyscallContext, env: &ExecutorEnv) -> Result<PendingECall> {
     let reg = ctx.load_register(REG_T0);
     log::trace!("Ecall {reg:#x}");
     let mut ecall = ECallExecutor {
         ctx,
-        exec: ECallRecord::default(),
+        exec: PendingECall::default(),
     };
     match reg {
         ecall::HALT => ecall.do_halt(),
@@ -71,17 +73,6 @@ impl<'a, C: SyscallContext> ECallExecutor<'a, C> {
         (0..len)
             .map(|i| self.ctx.load_u32(addr + (i * WORD_SIZE) as u32))
             .collect()
-    }
-    fn load_ram(&mut self, addr: u32, len: usize) -> Vec<u8> {
-        if len != 0 {
-            if len != 0 {
-                let first_idx = addr / PAGE_SIZE as u32;
-                let last_idx = (addr + len as u32 - 1) / PAGE_SIZE as u32;
-                self.exec.page_loads.extend(first_idx..=last_idx);
-            }
-        }
-
-        self.ctx.load_region(addr, len as u32)
     }
 
     fn store_ram_words(&mut self, addr: u32, words: &[u32]) {
@@ -116,6 +107,7 @@ impl<'a, C: SyscallContext> ECallExecutor<'a, C> {
             _ => bail!("Illegal halt type: {halt_type}"),
         });
 
+        log::trace!("Halting, output ptr: {output_ptr:#08x}");
         self.load_ram_words(output_ptr, DIGEST_WORDS);
         Ok(())
     }
@@ -148,9 +140,10 @@ impl<'a, C: SyscallContext> ECallExecutor<'a, C> {
             );
             block1_ptr += BLOCK_BYTES as u32;
             block2_ptr += BLOCK_BYTES as u32;
-            self.use_cycles(SHA_CYCLES);
+            self.use_cycles(SHA_BLOCK_CYCLES);
         }
         log::debug!("Final sha state: {state:08x?}");
+        self.use_cycles(SHA_FINI_CYCLES + 1);
 
         for word in &mut state {
             *word = u32::from_be(*word);
@@ -166,7 +159,7 @@ impl<'a, C: SyscallContext> ECallExecutor<'a, C> {
         let [z_ptr, op, x_ptr, y_ptr, n_ptr] =
             self.load_registers([REG_A0, REG_A1, REG_A2, REG_A3, REG_A4]);
 
-        self.use_cycles(BIGINT_CYCLES);
+        self.use_cycles(1 + BIGINT_CYCLES);
         let mut load_bigint_le_bytes = |ptr: u32| -> [u8; bigint::WIDTH_BYTES] {
             let be_in = self.load_ram_words(ptr, bigint::WIDTH_WORDS);
             let mut arr = [0u32; bigint::WIDTH_WORDS];
@@ -215,7 +208,7 @@ impl<'a, C: SyscallContext> ECallExecutor<'a, C> {
         let syscall_name = self.ctx.load_string(name_ptr)?;
         log::trace!("Guest called syscall {syscall_name:?} requesting {to_guest_words} words back");
 
-        let chunks = align_up(to_guest_words as usize, WORD_SIZE);
+        let chunks = align_up(to_guest_words as usize, WORD_SIZE * 4) / (WORD_SIZE * 4);
         self.use_cycles(chunks + 2);
         let mut to_guest = vec![0; to_guest_words as usize];
 

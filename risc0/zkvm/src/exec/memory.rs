@@ -119,7 +119,7 @@ impl PageTable {
     }
 
     #[must_use]
-    pub fn mark_root(&mut self) -> usize {
+    pub fn mark_root(&mut self) -> (usize, usize) {
         log::trace!(
             "Marking root of page table, index {:#x}",
             self.info.root_idx
@@ -129,13 +129,16 @@ impl PageTable {
         // necessarily need to be updated.  However, it uses a
         // different cycle count than most pages since it might not be
         // entirely full.
-        let root_page_cycles = cycles_per_page(self.info.num_root_entries as usize / 2) * 2;
+        let mut read_cycles = cycles_per_page(self.info.num_root_entries as usize / 2);
         self.set(self.info.root_idx, Dir::Load);
+
+        let mut write_cycles = read_cycles;
         self.set(self.info.root_idx, Dir::Store);
 
-        root_page_cycles
-            + self.mark_addr(SYSTEM.start() as u32, Dir::Load)
-            + self.mark_addr(SYSTEM.start() as u32, Dir::Store)
+        read_cycles += self.mark_addr(SYSTEM.start() as u32, Dir::Load);
+        write_cycles += self.mark_addr(SYSTEM.start() as u32, Dir::Store);
+
+        (read_cycles, write_cycles)
     }
 }
 

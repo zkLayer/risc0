@@ -108,3 +108,5 @@ std = [
   "risc0-zkp/std",
   "serde/std",
 ]
+# Compare execution and proving cycles to make sure they line up
+cycle_count_debug = []

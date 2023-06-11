@@ -148,6 +148,9 @@ pub struct MachineContext {
     split_insn: Option<u32>,
 
     insn_counter: u32,
+
+    #[cfg(feature = "cycle_count_debug")]
+    cycle_pc: BTreeMap<u32, u32>,
 }
 
 impl CircuitStepHandler<Elem> for MachineContext {
@@ -221,7 +224,7 @@ impl CircuitStepHandler<Elem> for MachineContext {
                 Ok(())
             }
             "log" => {
-                self.log(extra, args);
+                self.log(cycle, extra, args);
                 Ok(())
             }
             "syscallInit" => Ok(()),
@@ -275,6 +278,8 @@ impl MachineContext {
             resident_words: BTreeSet::new(),
             split_insn: segment.split_insn,
             insn_counter: 0,
+            #[cfg(feature = "cycle_count_debug")]
+            cycle_pc: segment.cycle_pc.clone(),
         }
     }
 
@@ -330,10 +335,16 @@ impl MachineContext {
         }
 
         if !self.faults.reads.is_empty() {
+            log::info!("Page fault at {cycle}");
             return Ok(MajorType::PageFault.as_u32().into());
         }
 
         if self.is_flushing {
+            #[cfg(feature = "cycle_count_debug")]
+            if let Some((expected_cycle, expected_pc)) = self.cycle_pc.pop_first() {
+                panic!("Unexpected extra cycles from exeuctor: cycle {expected_cycle:#08x} pc {expected_pc:#08x}");
+            }
+
             return Ok(MajorType::PageFault.as_u32().into());
         }
 
@@ -344,6 +355,16 @@ impl MachineContext {
             insn,
             opcode
         );
+        #[cfg(feature = "cycle_count_debug")]
+        {
+            let (expected_cycle, expected_pc) = self
+                .cycle_pc
+                .pop_first()
+                .expect("Unexpected extra cycles in prover");
+
+            assert!(expected_cycle == cycle && expected_pc == pc, "Mismatched cycle counts: cycle {cycle} (expected {expected_cycle}), pc {pc:#08x} (expected {expected_pc:#08x})");
+        }
+
         self.insn_counter += 1;
 
         Ok(opcode.major.as_u32().into())
@@ -351,6 +372,7 @@ impl MachineContext {
 
     fn page_info(&mut self, cycle: usize) -> (Elem, Elem, Elem) {
         if let Some(page_idx) = self.faults.reads.pop_last() {
+            log::trace!("Page fault cycle {cycle}: {page_idx}");
             return (Elem::ONE, page_idx.into(), Elem::ZERO);
         }
 
@@ -540,7 +562,7 @@ impl MachineContext {
         Ok(q_elems)
     }
 
-    fn log(&mut self, msg: &str, args: &[Elem]) {
+    fn log(&mut self, cycle: usize, msg: &str, args: &[Elem]) {
         if log::max_level() < log::LevelFilter::Trace {
             // Don't bother to format it if we're not even logging.
             return;
@@ -593,7 +615,7 @@ impl MachineContext {
             "Args missing formatting: {:?} in {msg}",
             args_left
         );
-        log::trace!("{}", formatted);
+        log::trace!("[{}] {}", cycle, formatted);
     }
 
     fn ram_read(&mut self, cycle: usize, addr: Elem, op: Elem) -> (Elem, Elem, Elem, Elem) {

@@ -9,7 +9,7 @@ pub trait MachineState {
 }
 
 #[derive(Debug)]
-pub enum InstRecord {
+pub enum PendingInst {
     MemoryLoad {
         addr: u32,
         val: u32,
@@ -28,7 +28,7 @@ pub enum InstRecord {
     ECall,
 }
 
-use InstRecord::*;
+use PendingInst::*;
 
 // Extract bits in the same way as the RISC-V isa specified: high bit first,
 
@@ -49,7 +49,7 @@ const fn extract_bits_signed(val: u32, highest_bit: usize, lowest_bit: usize) ->
     signed >> (32 - nbits)
 }
 
-pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
+pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<PendingInst> {
     if pc & (WORD_SIZE - 1) != 0 {
         bail!("Unaligned program counter {pc:#08x}");
     }
@@ -93,9 +93,8 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
             };
             match (funct3, funct7) {
                 (0b000, 0b0000000) => set_rd("add", rs1.wrapping_add(rs2), 1),
-                (0b000, 0b0000001) => set_rd("mul", rs1.wrapping_mul(rs2), 2),
                 (0b000, 0b0100000) => set_rd("sub", rs1.wrapping_sub(rs2), 1),
-                (0b001, 0b0000000) => set_rd("sll", rs1.wrapping_shl(rs2), 2),
+                (0b001, 0b0000000) => set_rd("sll", rs1.wrapping_shl(rs2), 1),
                 (0b010, 0b0000000) => set_rd("slt", ((rs1 as i32) < (rs2 as i32)) as u32, 1),
                 (0b011, 0b0000000) => set_rd("sltu", (rs1 < rs2) as u32, 1),
                 (0b101, 0b0000000) => set_rd("srl", rs1.wrapping_shr(rs2), 2),
@@ -103,20 +102,21 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
                 (0b101, 0b0100000) => set_rd("sra", (rs1 as i32).wrapping_shr(rs2) as u32, 2),
                 (0b110, 0b0000000) => set_rd("or", rs1 | rs2, 2),
                 (0b111, 0b0000000) => set_rd("and", rs1 & rs2, 2),
+                (0b000, 0b0000001) => set_rd("mul", rs1.wrapping_mul(rs2), 1),
                 (0b001, 0b0000001) => set_rd(
                     "mulh",
                     (((rs1 as i32 as i64).wrapping_mul(rs2 as i32 as i64)) >> 32) as u32,
-                    2,
+                    1,
                 ),
                 (0b010, 0b0000001) => set_rd(
                     "mulhsu",
                     ((rs1 as i32 as u64).wrapping_mul(rs2 as u64) >> 32) as u32,
-                    2,
+                    1,
                 ),
                 (0b011, 0b0000001) => set_rd(
                     "mulhu",
                     ((rs1 as u64).wrapping_mul(rs2 as u64) >> 32) as u32,
-                    2,
+                    1,
                 ),
                 (0b100, 0b0000001) => set_rd(
                     "div",
@@ -159,7 +159,7 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
             };
             match (funct3, funct7) {
                 (0b000, _) => set_rd("addi", rs1.wrapping_add(imm), 1),
-                (0b001, 0b0000000) => set_rd("slli", rs1.wrapping_shl(imm), 2),
+                (0b001, 0b0000000) => set_rd("slli", rs1.wrapping_shl(imm), 1),
                 (0b010, _) => set_rd("slti", if (rs1 as i32) < (imm as i32) { 1 } else { 0 }, 1),
                 (0b011, _) => set_rd("sltiu", if rs1 < imm { 1 } else { 0 }, 1),
                 (0b100, _) => set_rd("xori", rs1 ^ imm, 2),
