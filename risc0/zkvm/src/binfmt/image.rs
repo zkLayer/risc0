@@ -113,7 +113,7 @@ impl PageTableInfo {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MemoryImage {
     /// Sparse memory memory image as a map from page index to page.
-    pages: BTreeMap<u32, Vec<u8>>,
+    pub pages: BTreeMap<u32, Vec<u8>>,
 
     /// Metadata about the structure of the page table
     pub info: PageTableInfo,
