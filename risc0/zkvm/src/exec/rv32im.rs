@@ -92,28 +92,28 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
                 })
             };
             match (funct3, funct7) {
-                (0x0, 0x00) => set_rd("add", rs1.wrapping_add(rs2), 1),
-                (0x0, 0x20) => set_rd("sub", rs1.wrapping_sub(rs2), 1),
-                (0x4, 0x00) => set_rd("xor", rs1 ^ rs2, 2),
-                (0x6, 0x00) => set_rd("or", rs1 | rs2, 2),
-                (0x7, 0x00) => set_rd("and", rs1 & rs2, 2),
-                (0x1, 0x00) => set_rd("sll", rs1.wrapping_shl(rs2), 2),
-                (0x5, 0x00) => set_rd("srl", rs1.wrapping_shr(rs2), 2),
-                (0x5, 0x20) => set_rd("sra", (rs1 as i32).wrapping_shr(rs2) as u32, 2),
-                (0x2, 0x00) => set_rd("slt", if (rs1 as i32) < (rs2 as i32) { 1 } else { 0 }, 1),
-                (0x3, 0x00) => set_rd("sltu", if rs1 < rs2 { 1 } else { 0 }, 1),
-                (0b000, 0x1) => set_rd("mul", rs1.wrapping_mul(rs2), 2),
-                (0b001, 0x1) => set_rd(
+                (0b000, 0b0000000) => set_rd("add", rs1.wrapping_add(rs2), 1),
+                (0b000, 0b0000001) => set_rd("mul", rs1.wrapping_mul(rs2), 2),
+                (0b000, 0b0100000) => set_rd("sub", rs1.wrapping_sub(rs2), 1),
+                (0b001, 0b0000000) => set_rd("sll", rs1.wrapping_shl(rs2), 2),
+                (0b010, 0b0000000) => set_rd("slt", ((rs1 as i32) < (rs2 as i32)) as u32, 1),
+                (0b011, 0b0000000) => set_rd("sltu", (rs1 < rs2) as u32, 1),
+                (0b101, 0b0000000) => set_rd("srl", rs1.wrapping_shr(rs2), 2),
+                (0b100, 0b0000000) => set_rd("xor", rs1 ^ rs2, 2),
+                (0b101, 0b0100000) => set_rd("sra", (rs1 as i32).wrapping_shr(rs2) as u32, 2),
+                (0b110, 0b0000000) => set_rd("or", rs1 | rs2, 2),
+                (0b111, 0b0000000) => set_rd("and", rs1 & rs2, 2),
+                (0b001, 0b0000001) => set_rd(
                     "mulh",
                     (((rs1 as i32 as i64).wrapping_mul(rs2 as i32 as i64)) >> 32) as u32,
                     2,
                 ),
-                (0b010, 0x1) => set_rd(
+                (0b010, 0b0000001) => set_rd(
                     "mulhsu",
                     ((rs1 as i32 as u64).wrapping_mul(rs2 as u64) >> 32) as u32,
                     2,
                 ),
-                (0b011, 0x1) => set_rd(
+                (0b011, 0b0000001) => set_rd(
                     "mulhu",
                     ((rs1 as u64).wrapping_mul(rs2 as u64) >> 32) as u32,
                     2,
@@ -127,11 +127,9 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
                     },
                     2,
                 ),
-                (0b101, 0b0000001) => {
-                    set_rd("divu", if rs2 == 0 { u32::MAX } else { rs1 / rs2 }, 2)
-                }
+                (0b101, 0b0000001) => set_rd("divu", rs1.checked_div(rs2).unwrap_or(u32::MAX), 2),
                 (0b110, 0b0000001) => set_rd(
-                    "remu",
+                    "rem",
                     if rs2 == 0 {
                         rs1
                     } else {
@@ -139,7 +137,7 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
                     },
                     2,
                 ),
-                (0b111, 0b0000001) => set_rd("remu", if rs2 == 0 { rs1 } else { rs1 % rs2 }, 2),
+                (0b111, 0b0000001) => set_rd("remu", rs1.checked_rem(rs2).unwrap_or(rs1), 2),
                 _ => bail_ctx!("Invalid R-format arithmetic op"),
             }
         }
@@ -161,14 +159,14 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
             };
             match (funct3, funct7) {
                 (0b000, _) => set_rd("addi", rs1.wrapping_add(imm), 1),
-                (0b100, _) => set_rd("xori", rs1 ^ imm, 2),
-                (0b110, _) => set_rd("ori", rs1 | imm, 2),
-                (0b111, _) => set_rd("andi", rs1 & imm, 2),
-                (0b001, 0) => set_rd("slli", rs1.wrapping_shl(imm), 2),
-                (0b101, 0) => set_rd("srli", rs1.wrapping_shr(imm), 2),
-                (0b101, 0x20) => set_rd("srai", (rs1 as i32).wrapping_shr(imm) as u32, 2),
+                (0b001, 0b0000000) => set_rd("slli", rs1.wrapping_shl(imm), 2),
                 (0b010, _) => set_rd("slti", if (rs1 as i32) < (imm as i32) { 1 } else { 0 }, 1),
                 (0b011, _) => set_rd("sltiu", if rs1 < imm { 1 } else { 0 }, 1),
+                (0b100, _) => set_rd("xori", rs1 ^ imm, 2),
+                (0b101, 0b0000000) => set_rd("srli", rs1.wrapping_shr(imm), 2),
+                (0b101, 0b0100000) => set_rd("srai", (rs1 as i32).wrapping_shr(imm) as u32, 2),
+                (0b110, _) => set_rd("ori", rs1 | imm, 2),
+                (0b111, _) => set_rd("andi", rs1 & imm, 2),
                 _ => bail_ctx!("Invalid I-format arithmetic op"),
             }
         }
@@ -191,11 +189,11 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
                 })
             };
             match funct3 {
-                0x0 => set_rd("lb", (shifted & 0xFF) as i8 as u32),
-                0x1 => set_rd("lh", (shifted & 0xFFFF) as i16 as u32),
-                0x2 => set_rd("lw", mem_word),
-                0x4 => set_rd("lbu", shifted & 0xFF),
-                0x5 => set_rd("lhu", shifted & 0xFFFF),
+                0b000 => set_rd("lb", (shifted & 0xFF) as i8 as u32),
+                0b001 => set_rd("lh", (shifted & 0xFFFF) as i16 as u32),
+                0b010 => set_rd("lw", mem_word),
+                0b100 => set_rd("lbu", shifted & 0xFF),
+                0b101 => set_rd("lhu", shifted & 0xFFFF),
                 _ => bail_ctx!("Invalid I-format memory load"),
             }
         }
@@ -221,9 +219,9 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
                 })
             };
             match funct3 {
-                0x0 => set_ram("sb", 1, 0xFF),
-                0x1 => set_ram("sh", 2, 0xFFFF),
-                0x2 => set_ram("sw", 4, 0xFFFFFFFF),
+                0b000 => set_ram("sb", 1, 0xFF),
+                0b001 => set_ram("sh", 2, 0xFFFF),
+                0b010 => set_ram("sw", 4, 0xFFFFFFFF),
                 _ => bail_ctx!("Invalid S-format memory store"),
             }
         }
@@ -277,12 +275,12 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
                 })
             };
             match funct3 {
-                0x0 => branch_if("beq", rs1 == rs2),
-                0x1 => branch_if("bne", rs1 != rs2),
-                0x4 => branch_if("blt", (rs1 as i32) < (rs2 as i32)),
-                0x5 => branch_if("bge", (rs1 as i32) >= (rs2 as i32)),
-                0x6 => branch_if("bltu", rs1 < rs2),
-                0x7 => branch_if("bgeu", rs1 >= rs2),
+                0b000 => branch_if("beq", rs1 == rs2),
+                0b001 => branch_if("bne", rs1 != rs2),
+                0b100 => branch_if("blt", (rs1 as i32) < (rs2 as i32)),
+                0b101 => branch_if("bge", (rs1 as i32) >= (rs2 as i32)),
+                0b110 => branch_if("bltu", rs1 < rs2),
+                0b111 => branch_if("bgeu", rs1 >= rs2),
                 _ => bail_ctx!("Invalid B-format branch"),
             }
         }
@@ -307,7 +305,7 @@ pub fn exec_rv32im(pc: u32, state: &impl MachineState) -> Result<InstRecord> {
         }
         0b1100111 => {
             // I-format jalr
-            if funct3 != 0x0 {
+            if funct3 != 0b000 {
                 bail_ctx!("Invalid I-format jalr");
             }
             let imm = bits_signed(31, 20) as u32;

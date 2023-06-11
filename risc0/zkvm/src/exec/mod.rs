@@ -134,16 +134,16 @@ impl<'a> MachineState for Executor<'a> {
     }
 }
 
-impl<'a> SyscallContext for &Executor<'a> {
+impl<'a> SyscallContext for Executor<'a> {
     fn get_cycle(&self) -> usize {
         self.prev_segment_cycles + self.init_cycles + (self.body_cycles - self.cycles_remaining)
     }
 
-    fn load_register(&mut self, reg: usize) -> u32 {
+    fn load_register(&self, reg: usize) -> u32 {
         self.regs[reg]
     }
 
-    fn load_u32(&mut self, addr: u32) -> u32 {
+    fn load_u32(&self, addr: u32) -> u32 {
         u32::from_le_bytes(
             self.ram[addr as usize..addr as usize + WORD_SIZE]
                 .try_into()
@@ -151,7 +151,7 @@ impl<'a> SyscallContext for &Executor<'a> {
         )
     }
 
-    fn load_u8(&mut self, addr: u32) -> u8 {
+    fn load_u8(&self, addr: u32) -> u8 {
         self.ram[addr as usize]
     }
 }
@@ -382,9 +382,7 @@ impl<'a> Executor<'a> {
         let mut cycles_needed = match &op {
             OpRecord::InstRecord(InstRecord::ECall) => {
                 // Execute the ecall, and try to apply it next loop.
-                let mut ctx: &Self = self;
-                let mut ctx2: &Self = self;
-                let ecall = exec_ecall(&mut ctx, &mut ctx2, &self.env)?;
+                let ecall = exec_ecall(self, &self.env)?;
                 self.pending_op = Some(OpRecord::ECallRecord(ecall));
                 return Ok(None);
             }

@@ -5,7 +5,7 @@ pub trait Syscall {
     fn syscall(
         &mut self,
         syscall: &str,
-        ctx: &mut dyn SyscallContext,
+        ctx: & dyn SyscallContext,
         to_guest: &mut [u32],
     ) -> Result<(u32, u32)>;
 }
@@ -80,7 +80,7 @@ impl<'a> Syscall for SyscallTable<'a> {
     fn syscall(
         &mut self,
         syscall: &str,
-        ctx: &mut dyn SyscallContext,
+        ctx: & dyn SyscallContext,
         to_guest: &mut [u32],
     ) -> Result<(u32, u32)> {
         if let Some(handler) = self.inner.get(syscall) {
@@ -107,7 +107,7 @@ pub(crate) mod syscalls {
         fn syscall(
             &mut self,
             _syscall: &str,
-            ctx: &mut dyn SyscallContext,
+            ctx: & dyn SyscallContext,
             _to_guest: &mut [u32],
         ) -> Result<(u32, u32)> {
             Ok((ctx.get_cycle() as u32, 0))
@@ -119,7 +119,7 @@ pub(crate) mod syscalls {
         fn syscall(
             &mut self,
             _syscall: &str,
-            ctx: &mut dyn SyscallContext,
+            ctx: & dyn SyscallContext,
             to_guest: &mut [u32],
         ) -> Result<(u32, u32)> {
             let buf_ptr = ctx.load_register(REG_A3);
@@ -144,7 +144,7 @@ pub(crate) mod syscalls {
         fn syscall(
             &mut self,
             _syscall: &str,
-            ctx: &mut dyn SyscallContext,
+            ctx: & dyn SyscallContext,
             _to_guest: &mut [u32],
         ) -> Result<(u32, u32)> {
             let buf_ptr = ctx.load_register(REG_A3);
@@ -161,7 +161,7 @@ pub(crate) mod syscalls {
         fn syscall(
             &mut self,
             _syscall: &str,
-            ctx: &mut dyn SyscallContext,
+            ctx: & dyn SyscallContext,
             _to_guest: &mut [u32],
         ) -> Result<(u32, u32)> {
             let buf_ptr = ctx.load_register(REG_A3);
@@ -190,7 +190,7 @@ impl<'a> Syscall for PosixIo<'a> {
     fn syscall(
         &mut self,
         syscall: &str,
-        ctx: &mut dyn SyscallContext,
+        ctx: & dyn SyscallContext,
         to_guest: &mut [u32],
     ) -> Result<(u32, u32)> {
         // TODO: Is there a way to use "match" here instead of if statements?
@@ -209,7 +209,7 @@ impl<'a> Syscall for Rc<RefCell<PosixIo<'a>>> {
     fn syscall(
         &mut self,
         syscall: &str,
-        ctx: &mut dyn SyscallContext,
+        ctx: & dyn SyscallContext,
         to_guest: &mut [u32],
     ) -> Result<(u32, u32)> {
         self.borrow_mut().syscall(syscall, ctx, to_guest)

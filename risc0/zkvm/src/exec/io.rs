@@ -45,7 +45,7 @@ pub trait Syscall {
     fn syscall(
         &mut self,
         syscall: &str,
-        ctx: &mut dyn SyscallContext,
+        ctx: &dyn SyscallContext,
         to_guest: &mut [u32],
     ) -> Result<(u32, u32)>;
 }
@@ -56,12 +56,12 @@ pub trait SyscallContext {
     fn get_cycle(&self) -> usize;
 
     /// Loads the value of the given register, e.g. REG_A0.
-    fn load_register(&mut self, num: usize) -> u32 {
+    fn load_register(&self, num: usize) -> u32 {
         self.load_u32((SYSTEM.start() + num * WORD_SIZE) as u32)
     }
 
     /// Loads bytes from the given region of memory.
-    fn load_region(&mut self, addr: u32, size: u32) -> Vec<u8> {
+    fn load_region(&self, addr: u32, size: u32) -> Vec<u8> {
         let mut region = Vec::new();
         for addr in addr..addr + size {
             region.push(self.load_u8(addr));
@@ -70,13 +70,13 @@ pub trait SyscallContext {
     }
 
     /// Loads an individual word from memory.
-    fn load_u32(&mut self, addr: u32) -> u32;
+    fn load_u32(&self, addr: u32) -> u32;
 
     /// Loads an individual byte from memory.
-    fn load_u8(&mut self, addr: u32) -> u8;
+    fn load_u8(&self, addr: u32) -> u8;
 
     /// Loads a null-terminated string from memory.
-    fn load_string(&mut self, mut addr: u32) -> Result<String> {
+    fn load_string(&self, mut addr: u32) -> Result<String> {
         let mut s: Vec<u8> = Vec::new();
         loop {
             let b = self.load_u8(addr);
@@ -138,7 +138,7 @@ impl<H: SliceIo> Syscall for SliceIoSyscall<H> {
     fn syscall(
         &mut self,
         syscall: &str,
-        ctx: &mut dyn SyscallContext,
+        ctx: &dyn SyscallContext,
         to_guest: &mut [u32],
     ) -> Result<(u32, u32)> {
         let mut stored_result = self.stored_result.borrow_mut();
@@ -216,7 +216,7 @@ impl<'a> PosixIo<'a> {
         self
     }
 
-    fn sys_read_avail(&mut self, ctx: &mut dyn SyscallContext) -> Result<(u32, u32)> {
+    fn sys_read_avail(&mut self, ctx: &dyn SyscallContext) -> Result<(u32, u32)> {
         let fd = ctx.load_register(REG_A3);
         let reader = self
             .read_fds
@@ -227,11 +227,7 @@ impl<'a> PosixIo<'a> {
         Ok((navail, 0))
     }
 
-    fn sys_read(
-        &mut self,
-        ctx: &mut dyn SyscallContext,
-        to_guest: &mut [u32],
-    ) -> Result<(u32, u32)> {
+    fn sys_read(&mut self, ctx: &dyn SyscallContext, to_guest: &mut [u32]) -> Result<(u32, u32)> {
         let fd = ctx.load_register(REG_A3);
         let nbytes = ctx.load_register(REG_A4) as usize;
 
@@ -290,7 +286,7 @@ impl<'a> PosixIo<'a> {
         ))
     }
 
-    fn sys_write(&mut self, ctx: &mut dyn SyscallContext) -> Result<(u32, u32)> {
+    fn sys_write(&mut self, ctx: &dyn SyscallContext) -> Result<(u32, u32)> {
         let fd = ctx.load_register(REG_A3);
         let buf_ptr = ctx.load_register(REG_A4);
         let buf_len = ctx.load_register(REG_A5);
@@ -327,7 +323,7 @@ impl<'a> Syscall for PosixIo<'a> {
     fn syscall(
         &mut self,
         syscall: &str,
-        ctx: &mut dyn SyscallContext,
+        ctx: &dyn SyscallContext,
         to_guest: &mut [u32],
     ) -> Result<(u32, u32)> {
         // TODO: Is there a way to use "match" here instead of if statements?
@@ -347,7 +343,7 @@ impl<'a> Syscall for Rc<RefCell<PosixIo<'a>>> {
     fn syscall(
         &mut self,
         syscall: &str,
-        ctx: &mut dyn SyscallContext,
+        ctx: &dyn SyscallContext,
         to_guest: &mut [u32],
     ) -> Result<(u32, u32)> {
         self.borrow_mut().syscall(syscall, ctx, to_guest)
@@ -396,7 +392,7 @@ pub(crate) mod syscalls {
         fn syscall(
             &mut self,
             _syscall: &str,
-            ctx: &mut dyn SyscallContext,
+            ctx: &dyn SyscallContext,
             _to_guest: &mut [u32],
         ) -> Result<(u32, u32)> {
             Ok((ctx.get_cycle() as u32, 0))
@@ -408,7 +404,7 @@ pub(crate) mod syscalls {
         fn syscall(
             &mut self,
             _syscall: &str,
-            ctx: &mut dyn SyscallContext,
+            ctx: &dyn SyscallContext,
             to_guest: &mut [u32],
         ) -> Result<(u32, u32)> {
             let buf_ptr = ctx.load_register(REG_A3);
@@ -433,7 +429,7 @@ pub(crate) mod syscalls {
         fn syscall(
             &mut self,
             _syscall: &str,
-            ctx: &mut dyn SyscallContext,
+            ctx: &dyn SyscallContext,
             _to_guest: &mut [u32],
         ) -> Result<(u32, u32)> {
             let buf_ptr = ctx.load_register(REG_A3);
@@ -450,7 +446,7 @@ pub(crate) mod syscalls {
         fn syscall(
             &mut self,
             _syscall: &str,
-            ctx: &mut dyn SyscallContext,
+            ctx: &dyn SyscallContext,
             _to_guest: &mut [u32],
         ) -> Result<(u32, u32)> {
             let buf_ptr = ctx.load_register(REG_A3);
@@ -466,7 +462,7 @@ pub(crate) mod syscalls {
         fn syscall(
             &mut self,
             _syscall: &str,
-            _ctx: &mut dyn SyscallContext,
+            _ctx: &dyn SyscallContext,
             to_guest: &mut [u32],
         ) -> Result<(u32, u32)> {
             log::debug!("SYS_RANDOM: {}", to_guest.len());

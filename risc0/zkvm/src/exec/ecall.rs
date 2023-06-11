@@ -1,4 +1,3 @@
-use core::cell::RefCell;
 use std::collections::BTreeSet;
 
 use anyhow::{anyhow, bail, Result};
@@ -33,24 +32,18 @@ pub struct ECallRecord {
     pub cycles: usize,
 }
 
-struct ECallExecutor<'a> {
+struct ECallExecutor<'a, C: SyscallContext> {
     // TODO: Make it so SyscallContext doesn't need to be mut
-    ctx: &'a mut dyn SyscallContext,
-    ctx2: RefCell<&'a mut dyn SyscallContext>,
+    ctx: &'a C,
     exec: ECallRecord,
 }
 
-pub fn exec_ecall(
-    ctx: &mut dyn SyscallContext,
-    ctx2: &mut dyn SyscallContext,
-    env: &ExecutorEnv,
-) -> Result<ECallRecord> {
+pub fn exec_ecall(ctx: &impl SyscallContext, env: &ExecutorEnv) -> Result<ECallRecord> {
     let reg = ctx.load_register(REG_T0);
     log::trace!("Ecall {reg:#x}");
     let mut ecall = ECallExecutor {
         ctx,
         exec: ECallRecord::default(),
-        ctx2: RefCell::new(ctx2),
     };
     match reg {
         ecall::HALT => ecall.do_halt(),
@@ -63,9 +56,9 @@ pub fn exec_ecall(
     Ok(ecall.exec)
 }
 
-impl<'a> ECallExecutor<'a> {
-    fn load_registers<const N: usize>(&mut self, idxs: [usize; N]) -> [u32; N] {
-        idxs.map(|idx| self.ctx2.borrow_mut().load_register(idx))
+impl<'a, C: SyscallContext> ECallExecutor<'a, C> {
+    fn load_registers<const N: usize>(&self, idxs: [usize; N]) -> [u32; N] {
+        idxs.map(|idx| self.ctx.load_register(idx))
     }
 
     fn load_ram_words(&mut self, addr: u32, len: usize) -> Vec<u32> {
@@ -229,11 +222,9 @@ impl<'a> ECallExecutor<'a> {
         let handler = env
             .get_syscall(&syscall_name)
             .ok_or(anyhow!("Unknown syscall: {syscall_name:?}"))?;
-        let (a0, a1) = (**handler).borrow_mut().syscall(
-            &syscall_name,
-            *self.ctx2.borrow_mut(),
-            &mut to_guest,
-        )?;
+        let (a0, a1) = (**handler)
+            .borrow_mut()
+            .syscall(&syscall_name, self.ctx, &mut to_guest)?;
 
         self.store_ram_words(to_guest_ptr, &to_guest);
         self.store_register(REG_A0, a0);
