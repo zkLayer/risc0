@@ -35,10 +35,7 @@ use std::{cell::RefCell, fmt::Debug, io::Write, mem::take, rc::Rc};
 
 use anyhow::{bail, Result};
 use ecall::{exec_ecall, PendingECall};
-use memory::{
-    image_to_ram, ram_to_image, Dir, PageTable, READ_CYCLES_PER_FULL_PAGE,
-    WRITE_CYCLES_PER_FULL_PAGE,
-};
+use memory::{image_to_ram, ram_to_image, Dir, PageTable, CYCLES_PER_FULL_PAGE};
 use risc0_zkp::{core::log2_ceil, MAX_CYCLES_PO2, MIN_CYCLES_PO2, ZK_CYCLES};
 use risc0_zkvm_platform::{
     fileno,
@@ -509,8 +506,8 @@ impl<'a> Executor<'a> {
             PendingOp::PendingInst(PendingInst::RegisterStore { cycles, .. }) => *cycles,
             PendingOp::PendingECall(ecall @ PendingECall { cycles, .. }) => {
                 let (page_loads, page_stores) = self.calc_ecall_pages(ecall);
-                page_loads.len() * READ_CYCLES_PER_FULL_PAGE
-                    + page_stores.len() * WRITE_CYCLES_PER_FULL_PAGE
+                page_loads.len() * CYCLES_PER_FULL_PAGE
+                    + page_stores.len() * CYCLES_PER_FULL_PAGE
                     + cycles
             }
         };

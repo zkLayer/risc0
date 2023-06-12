@@ -71,7 +71,7 @@ impl PageTable {
     }
 
     pub fn cycles_needed(&self, page_idx: u32, dir: Dir) -> usize {
-        self.pages_needed(page_idx, dir).count() * cycles_per_full_page(dir)
+        self.pages_needed(page_idx, dir).count() * CYCLES_PER_FULL_PAGE
     }
 
     #[must_use]
@@ -95,7 +95,7 @@ impl PageTable {
                 "mark_page assumes the root page has already been marked"
             );
             self.set(page_idx, dir);
-            tot += cycles_per_full_page(dir);
+            tot += CYCLES_PER_FULL_PAGE;
             page_idx = self.info.get_page_entry_addr(page_idx) / PAGE_SIZE as u32;
         }
     }
@@ -129,9 +129,9 @@ impl PageTable {
         // necessarily need to be updated.  However, it uses a
         // different cycle count than most pages since it might not be
         // entirely full.
-        let mut read_cycles = cycles_per_page(self.info.num_root_entries as usize / 2, Dir::Load);
+        let mut read_cycles = cycles_per_page(self.info.num_root_entries as usize / 2);
         self.set(self.info.root_idx, Dir::Load);
-        let mut write_cycles = cycles_per_page(self.info.num_root_entries as usize / 2, Dir::Store);
+        let mut write_cycles = cycles_per_page(self.info.num_root_entries as usize / 2);
         self.set(self.info.root_idx, Dir::Store);
 
         read_cycles += self.mark_addr(SYSTEM.start() as u32, Dir::Load);
@@ -141,13 +141,8 @@ impl PageTable {
     }
 }
 
-pub const fn cycles_per_page(blocks_per_page: usize, dir: Dir) -> usize {
-    1 + SHA_INIT
-        + (SHA_LOAD + SHA_MAIN) * blocks_per_page
-        + match dir {
-            Dir::Load => 0,
-            Dir::Store => 0,
-        }
+pub const fn cycles_per_page(blocks_per_page: usize) -> usize {
+    1 + SHA_INIT + (SHA_LOAD + SHA_MAIN) * blocks_per_page
 }
 
 /// The number of blocks that fit within a single page.
@@ -157,15 +152,7 @@ const SHA_INIT: usize = 5;
 const SHA_LOAD: usize = 16;
 const SHA_MAIN: usize = 52;
 
-pub const READ_CYCLES_PER_FULL_PAGE: usize = cycles_per_page(BLOCKS_PER_PAGE, Dir::Load);
-pub const WRITE_CYCLES_PER_FULL_PAGE: usize = cycles_per_page(BLOCKS_PER_PAGE, Dir::Store);
-
-const fn cycles_per_full_page(dir: Dir) -> usize {
-    match dir {
-        Dir::Load => READ_CYCLES_PER_FULL_PAGE,
-        Dir::Store => WRITE_CYCLES_PER_FULL_PAGE,
-    }
-}
+pub const CYCLES_PER_FULL_PAGE: usize = cycles_per_page(BLOCKS_PER_PAGE);
 
 pub fn image_to_ram(image: &MemoryImage, ram: &mut [u8]) {
     for (&page_idx, page) in image.pages.iter() {
