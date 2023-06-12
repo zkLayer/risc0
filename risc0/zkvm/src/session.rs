@@ -93,7 +93,7 @@ pub struct Segment {
 
     /// If configured, cycle number and program counter for each cycle executed.
     #[cfg(feature = "cycle_count_debug")]
-    pub cycle_pc: alloc::collections::BTreeMap<u32, u32>,
+    pub cycle_pc: alloc::collections::VecDeque<(u32, u32)>,
 }
 
 impl Session {
@@ -144,7 +144,7 @@ impl Segment {
             index,
             insn_cycles,
             #[cfg(feature = "cycle_count_debug")]
-            cycle_pc: alloc::collections::BTreeMap::new(),
+            cycle_pc: alloc::collections::VecDeque::new(),
         }
     }
 }

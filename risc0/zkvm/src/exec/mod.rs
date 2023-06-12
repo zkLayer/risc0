@@ -35,7 +35,10 @@ use std::{cell::RefCell, fmt::Debug, io::Write, mem::take, rc::Rc};
 
 use anyhow::{bail, Result};
 use ecall::{exec_ecall, PendingECall};
-use memory::{image_to_ram, ram_to_image, Dir, PageTable, CYCLES_PER_FULL_PAGE};
+use memory::{
+    image_to_ram, ram_to_image, Dir, PageTable, READ_CYCLES_PER_FULL_PAGE,
+    WRITE_CYCLES_PER_FULL_PAGE,
+};
 use risc0_zkp::{core::log2_ceil, MAX_CYCLES_PO2, MIN_CYCLES_PO2, ZK_CYCLES};
 use risc0_zkvm_platform::{
     fileno,
@@ -168,6 +171,7 @@ impl<'a> Executor<'a> {
             - self.read_cycles
             - self.write_cycles
             - self.fini_cycles
+            - 1
     }
 
     /// Construct a new [Executor] from a [MemoryImage] and entry point.
@@ -274,10 +278,8 @@ impl<'a> Executor<'a> {
     {
         let read_cycles = take(&mut self.read_cycles);
         let write_cycles = match exit_code {
-            ExitCode::Paused(_) | ExitCode::SystemSplit => {
-                // We only need to swap out if we're not halting
-                take(&mut self.write_cycles)
-            }
+            ExitCode::Paused(_) => take(&mut self.write_cycles),
+            ExitCode::SystemSplit => take(&mut self.write_cycles),
             ExitCode::Halted(_) => {
                 self.write_cycles = 0;
                 0
@@ -285,10 +287,12 @@ impl<'a> Executor<'a> {
             ExitCode::SessionLimit => bail!("Session limit exceeded"),
         };
 
-        log::trace!("Finishing segment with cur = {}, {read_cycles} read, {write_cycles} write, {CYCLES_PER_FULL_PAGE} cycles per full page", self.segment_cycle);
+        log::debug!("{:?}: Finishing segment with cur = {}, {read_cycles} read, {write_cycles} write = {} total, pc = {:#08x}", exit_code, self.segment_cycle,
+        self.segment_cycle + read_cycles + write_cycles, self.pc);
 
+        let old_segment_cycle = take(&mut self.segment_cycle);
         self.prev_segment_cycles +=
-            take(&mut self.segment_cycle) + read_cycles + write_cycles + self.fini_cycles;
+            old_segment_cycle + read_cycles + write_cycles + self.fini_cycles;
 
         let syscalls = take(&mut self.cur_segment.syscalls);
         let mut old_segment = self.cur_segment.clone();
@@ -316,11 +320,24 @@ impl<'a> Executor<'a> {
         {
             // Since reads are all done at the beginning, apply this offset to all our cycle
             // counts.
-            let cycle_pc = take(&mut old_segment.cycle_pc)
-                .into_iter()
-                .map(|(cycle, pc)| (cycle + read_cycles as u32, pc))
-                .collect();
+            let mut cycle_pc: alloc::collections::VecDeque<(u32, u32)> =
+                take(&mut old_segment.cycle_pc)
+                    .into_iter()
+                    .map(|(cycle, pc)| (cycle + read_cycles as u32, pc))
+                    .collect();
+
+            if let ExitCode::Paused(_) = exit_code {
+                // Paused flushes writes prior to the ecall through
+                // the magic of get_major.
+                cycle_pc.back_mut().unwrap().0 += write_cycles as u32;
+            };
+            // Make sure we correctly calculated write_cycles
+            cycle_pc.push_back((
+                (old_segment_cycle + read_cycles + write_cycles + 1) as u32,
+                u32::MAX,
+            ));
             old_segment.cycle_pc = cycle_pc;
+            self.cur_segment.cycle_pc.clear();
         }
 
         self.start_segment();
@@ -370,7 +387,7 @@ impl<'a> Executor<'a> {
     pub fn trace(&mut self, event: TraceEvent) -> Result<()> {
         #[cfg(feature = "cycle_count_debug")]
         if let TraceEvent::InstructionStart { cycle, pc } = event {
-            self.cur_segment.cycle_pc.insert(cycle, pc);
+            self.cur_segment.cycle_pc.push_back((cycle, pc));
         }
 
         if let Some(cb) = &self.env.trace_callback {
@@ -399,7 +416,7 @@ impl<'a> Executor<'a> {
                 self.split(exit_code, &mut callback)?;
                 match exit_code {
                     ExitCode::SystemSplit => {
-                        // Keep going generating more segments.
+                        // Keep going generating more segments
                     }
                     _ => break,
                 }
@@ -418,10 +435,11 @@ impl<'a> Executor<'a> {
 
     pub fn step(&mut self) -> Result<Option<ExitCode>> {
         log::trace!(
-            "Step at pc={:#08x}, pending_op = {:?}, cycles = {} + {} dirty + {} fini, limit = {}",
+            "Step at pc={:#08x}, pending_op = {:?}, cycles = {} + {} read + {} write + {} fini, limit = {}",
             self.pc,
             &self.pending_op,
             self.segment_cycle,
+            self.read_cycles,
             self.write_cycles,
             self.fini_cycles,
             self.segment_limit
@@ -491,7 +509,9 @@ impl<'a> Executor<'a> {
             PendingOp::PendingInst(PendingInst::RegisterStore { cycles, .. }) => *cycles,
             PendingOp::PendingECall(ecall @ PendingECall { cycles, .. }) => {
                 let (page_loads, page_stores) = self.calc_ecall_pages(ecall);
-                (page_loads.len() + page_stores.len()) * CYCLES_PER_FULL_PAGE + cycles
+                page_loads.len() * READ_CYCLES_PER_FULL_PAGE
+                    + page_stores.len() * WRITE_CYCLES_PER_FULL_PAGE
+                    + cycles
             }
         };
 

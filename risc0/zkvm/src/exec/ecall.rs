@@ -206,9 +206,12 @@ impl<'a, C: SyscallContext> ECallExecutor<'a, C> {
             self.load_registers([REG_A0, REG_A1, REG_A2]);
         // No need to record RAM loads; this is all done in the host.
         let syscall_name = self.ctx.load_string(name_ptr)?;
-        log::trace!("Guest called syscall {syscall_name:?} requesting {to_guest_words} words back");
 
-        let chunks = align_up(to_guest_words as usize, WORD_SIZE * 4) / (WORD_SIZE * 4);
+        const COPY_IN_WORDS_PER_CHUNK: usize = 4;
+
+        let chunks =
+            align_up(to_guest_words as usize, COPY_IN_WORDS_PER_CHUNK) / COPY_IN_WORDS_PER_CHUNK;
+        log::trace!("Guest called syscall {syscall_name:?} requesting {to_guest_words} words back, {chunks} chunks");
         self.use_cycles(chunks + 2);
         let mut to_guest = vec![0; to_guest_words as usize];
 

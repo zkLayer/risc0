@@ -150,7 +150,11 @@ pub struct MachineContext {
     insn_counter: u32,
 
     #[cfg(feature = "cycle_count_debug")]
-    cycle_pc: BTreeMap<u32, u32>,
+    cycle_pc: alloc::collections::VecDeque<(u32, u32)>,
+    #[cfg(feature = "cycle_count_debug")]
+    segment_index: u32,
+    #[cfg(feature = "cycle_count_debug")]
+    cycle_pc_index: usize,
 }
 
 impl CircuitStepHandler<Elem> for MachineContext {
@@ -280,7 +284,19 @@ impl MachineContext {
             insn_counter: 0,
             #[cfg(feature = "cycle_count_debug")]
             cycle_pc: segment.cycle_pc.clone(),
+            #[cfg(feature = "cycle_count_debug")]
+            segment_index: segment.index,
+            #[cfg(feature = "cycle_count_debug")]
+            cycle_pc_index: 0,
         }
+    }
+
+    #[cfg(feature = "cycle_count_debug")]
+    fn check_flush_cycle(&mut self, cycle: usize) {
+        let (expected_cycle, expected_pc) = self.cycle_pc[self.cycle_pc_index];
+
+        assert!(expected_cycle == cycle as u32 && expected_pc == u32::MAX, "{}/{}: Unexpected flush complete from cycle; cycle {cycle} expected {expected_cycle}; got flush complete, expected pc {expected_pc:#08x}", self.cycle_pc_index, self.cycle_pc.len());
+        self.cycle_pc_index += 1;
     }
 
     fn halt(&mut self, cycle: usize, exit_code: Elem, pc: Elem) {
@@ -301,6 +317,9 @@ impl MachineContext {
                 _ => unimplemented!("Unsupported exit_code: {exit_code}"),
             }
             self.is_halted = true;
+
+            #[cfg(feature = "cycle_count_debug")]
+            self.check_flush_cycle(cycle);
         }
     }
 
@@ -335,16 +354,10 @@ impl MachineContext {
         }
 
         if !self.faults.reads.is_empty() {
-            log::info!("Page fault at {cycle}");
             return Ok(MajorType::PageFault.as_u32().into());
         }
 
         if self.is_flushing {
-            #[cfg(feature = "cycle_count_debug")]
-            if let Some((expected_cycle, expected_pc)) = self.cycle_pc.pop_first() {
-                panic!("Unexpected extra cycles from exeuctor: cycle {expected_cycle:#08x} pc {expected_pc:#08x}");
-            }
-
             return Ok(MajorType::PageFault.as_u32().into());
         }
 
@@ -357,12 +370,10 @@ impl MachineContext {
         );
         #[cfg(feature = "cycle_count_debug")]
         {
-            let (expected_cycle, expected_pc) = self
-                .cycle_pc
-                .pop_first()
-                .expect("Unexpected extra cycles in prover");
+            let (expected_cycle, expected_pc) = self.cycle_pc[self.cycle_pc_index];
 
-            assert!(expected_cycle == cycle && expected_pc == pc, "Mismatched cycle counts: cycle {cycle} (expected {expected_cycle}), pc {pc:#08x} (expected {expected_pc:#08x})");
+            assert!(expected_cycle == cycle && expected_pc == pc, "{}/{}: Mismatched cycle counts in segment {}: cycle {cycle} (expected {expected_cycle}), pc {pc:#08x} (expected {expected_pc:#08x})", self.cycle_pc_index, self.cycle_pc.len(), self.segment_index);
+            self.cycle_pc_index += 1;
         }
 
         self.insn_counter += 1;
