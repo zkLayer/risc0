@@ -14,6 +14,8 @@
 
 #![no_main]
 
+use std::io::Read;
+
 use risc0_zkvm::{
     guest::env,
     sha::{Impl, Sha256},
@@ -23,7 +25,9 @@ risc0_zkvm::guest::entry!(main);
 
 // Example of using the risc0_zkvm::sha module to hash data.
 pub fn main() {
-    let data: String = env::read();
-    let digest = Impl::hash_bytes(&data.as_bytes());
+    let mut data = Vec::<u8>::new();
+    env::stdin().read_to_end(&mut data).unwrap();
+
+    let digest = Impl::hash_bytes(&data);
     env::commit(&digest.as_bytes());
 }
