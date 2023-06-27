@@ -526,7 +526,6 @@ impl<'a> Executor<'a> {
         })?;
 
         self.read_cycles += self.page_table.mark_addr(self.pc, Dir::Load);
-        self.cur_segment.insn_cycles += 1;
 
         match op {
             PendingOp::PendingInst(PendingInst::ECall) => {
@@ -538,6 +537,7 @@ impl<'a> Executor<'a> {
                 self.regs[reg] = val;
                 self.pc += WORD_SIZE as u32;
                 self.trace(TraceEvent::RegisterSet { reg, value: val })?;
+                self.cur_segment.insn_cycles += 1;
                 Ok(None)
             }
             PendingOp::PendingInst(PendingInst::MemoryStore { addr, val }) => {
@@ -551,6 +551,7 @@ impl<'a> Executor<'a> {
                     .clone_from_slice(&val.to_le_bytes());
                 self.pc += WORD_SIZE as u32;
                 self.trace(TraceEvent::MemorySet { addr, value: val })?;
+                self.cur_segment.insn_cycles += 1;
                 Ok(None)
             }
             PendingOp::PendingInst(PendingInst::RegisterStore {
@@ -565,6 +566,7 @@ impl<'a> Executor<'a> {
                 }
                 self.pc = new_pc;
                 self.trace(TraceEvent::RegisterSet { reg, value: val })?;
+                self.cur_segment.insn_cycles += cycles;
                 Ok(None)
             }
             PendingOp::PendingECall(ecall) => {
@@ -580,6 +582,7 @@ impl<'a> Executor<'a> {
                 } = ecall;
 
                 self.segment_cycle += cycles;
+                self.cur_segment.insn_cycles += cycles;
                 for page_idx in page_loads {
                     self.read_cycles += self.page_table.mark_page(page_idx, Dir::Load);
                 }
