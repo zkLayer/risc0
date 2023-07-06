@@ -13,6 +13,14 @@
 // limitations under the License.
 
 //! Manages formatted binaries used by the RISC Zero zkVM
+#[cfg(not(target_os = "zkvm"))]
+pub mod elf;
+#[cfg(not(target_os = "zkvm"))]
+pub mod image;
 
-pub(crate) mod elf;
-pub(crate) mod image;
+pub use image::compute_image_id;
+#[cfg(not(target_os = "zkvm"))]
+pub use image::MemoryImage;
+
+#[cfg(not(target_os = "zkvm"))]
+pub use crate::elf::Program;

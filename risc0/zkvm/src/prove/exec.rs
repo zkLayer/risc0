@@ -33,10 +33,9 @@ use risc0_zkvm_platform::{
 
 use super::plonk;
 use crate::{
-    binfmt::image::MemoryImage,
     opcode::{MajorType, OpCode},
     session::PageFaults,
-    Segment,
+    MemoryImage, Segment,
 };
 
 #[allow(dead_code)]

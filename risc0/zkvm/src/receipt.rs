@@ -424,6 +424,7 @@ impl ReceiptMetadata {
     }
 }
 
+/// TODO: merge this with the compute ID function in risc0-binfmt
 /// Compute and return the ImageID of the given `(merkle_root, pc)` pair.
 pub fn compute_image_id(merkle_root: &Digest, pc: u32) -> Digest {
     use risc0_zkp::core::{digest::DIGEST_WORDS, hash::sha::Sha256};
