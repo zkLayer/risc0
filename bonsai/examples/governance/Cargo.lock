@@ -3440,6 +3440,7 @@ dependencies = [
  "risc0-zkp",
  "risc0-zkvm-platform",
  "serde",
+ "sha2 0.10.7",
 ]
 
 [[package]]
