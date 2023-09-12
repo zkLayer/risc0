@@ -8,6 +8,8 @@ members = [
     "digital-signature/core",
     "ecdsa",
     "factors",
+    "fhe",
+    "fhe/core",
     "json",
     "json/core",
     "password-checker",
