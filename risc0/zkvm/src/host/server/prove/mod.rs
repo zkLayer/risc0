@@ -13,22 +13,6 @@
 // limitations under the License.
 
 //! Run the zkVM guest and prove its results.
-//!
-//! # Usage
-//! The primary use of this module is to provably run a zkVM guest by use of a
-//! [Session]. See the [Session] documentation for more detailed usage
-//! information.
-//!
-//! ```rust
-//! use risc0_zkvm::{default_prover, ExecutorEnv};
-//! use risc0_zkvm_methods::FIB_ELF;
-//!
-//! # #[cfg(not(feature = "cuda"))]
-//! # {
-//! let env = ExecutorEnv::builder().add_input(&[20]).build().unwrap();
-//! let receipt = default_prover().prove_elf(env, FIB_ELF).unwrap();
-//! # }
-//! ```
 
 mod dev_mode;
 mod exec;
@@ -51,19 +35,19 @@ use risc0_core::field::{
 use risc0_zkp::{
     adapter::CircuitInfo,
     core::digest::DIGEST_WORDS,
-    hal::{EvalCheck, Hal},
+    hal::{CircuitHal, Hal},
 };
-use risc0_zkvm_platform::{memory::MEM_SIZE, PAGE_SIZE, WORD_SIZE};
+use risc0_zkvm_platform::{memory::GUEST_MAX_MEM, PAGE_SIZE, WORD_SIZE};
 
 use self::{dev_mode::DevModeProver, prover_impl::ProverImpl};
 use crate::{
-    is_dev_mode, Executor, ExecutorEnv, ProverOpts, Receipt, Segment, SegmentReceipt, Session,
+    is_dev_mode, ExecutorEnv, ExecutorImpl, ProverOpts, Receipt, Segment, SegmentReceipt, Session,
     VerifierContext,
 };
 
-/// A DynProverImpl can execute a given [MemoryImage] and produce a [Receipt]
+/// A ProverServer can execute a given [MemoryImage] and produce a [Receipt]
 /// that can be used to verify correct computation.
-pub trait DynProverImpl {
+pub trait ProverServer {
     /// Prove the specified [MemoryImage].
     fn prove(
         &self,
@@ -71,7 +55,7 @@ pub trait DynProverImpl {
         ctx: &VerifierContext,
         image: MemoryImage,
     ) -> Result<Receipt> {
-        let mut exec = Executor::new(env, image)?;
+        let mut exec = ExecutorImpl::new(env, image)?;
         let session = exec.run()?;
         self.prove_session(ctx, &session)
     }
@@ -88,7 +72,7 @@ pub trait DynProverImpl {
         ctx: &VerifierContext,
         elf: &[u8],
     ) -> Result<Receipt> {
-        let program = Program::load_elf(elf, MEM_SIZE as u32)?;
+        let program = Program::load_elf(elf, GUEST_MAX_MEM as u32)?;
         let image = MemoryImage::new(&program, PAGE_SIZE as u32)?;
         self.prove(env, ctx, image)
     }
@@ -99,28 +83,28 @@ pub trait DynProverImpl {
     /// Prove the specified [Segment].
     fn prove_segment(&self, ctx: &VerifierContext, segment: &Segment) -> Result<SegmentReceipt>;
 
-    /// Return the peak memory usage that this [DynProverImpl] has experienced.
+    /// Return the peak memory usage that this [ProverServer] has experienced.
     fn get_peak_memory_usage(&self) -> usize;
 }
 
-/// A pair of [Hal] and [EvalCheck].
+/// A pair of [Hal] and [CircuitHal].
 #[derive(Clone)]
-pub struct HalEval<H, E>
+pub struct HalPair<H, C>
 where
     H: Hal<Field = BabyBear, Elem = Elem, ExtElem = ExtElem>,
-    E: EvalCheck<H>,
+    C: CircuitHal<H>,
 {
     /// A [Hal] implementation.
     pub hal: Rc<H>,
 
-    /// An [EvalCheck] implementation.
-    pub eval: Rc<E>,
+    /// An [CircuitHal] implementation.
+    pub circuit_hal: Rc<C>,
 }
 
 impl Session {
     /// For each segment, call [Segment::prove] and collect the receipts.
     pub fn prove(&self) -> Result<Receipt> {
-        let prover = get_prover_impl(&ProverOpts::default())?;
+        let prover = get_prover_server(&ProverOpts::default())?;
         prover.prove_session(&VerifierContext::default(), self)
     }
 }
@@ -128,7 +112,7 @@ impl Session {
 impl Segment {
     /// Call the ZKP system to produce a [SegmentReceipt].
     pub fn prove(&self, ctx: &VerifierContext) -> Result<SegmentReceipt> {
-        let prover = get_prover_impl(&ProverOpts::default())?;
+        let prover = get_prover_server(&ProverOpts::default())?;
         prover.prove_segment(ctx, self)
     }
 
@@ -169,23 +153,29 @@ mod cuda {
     use std::rc::Rc;
 
     use anyhow::{bail, Result};
-    use risc0_circuit_rv32im::cuda::{CudaEvalCheckPoseidon, CudaEvalCheckSha256};
+    use risc0_circuit_rv32im::cuda::{CudaCircuitHalPoseidon, CudaCircuitHalSha256};
     use risc0_zkp::hal::cuda::{CudaHalPoseidon, CudaHalSha256};
 
-    use super::{DynProverImpl, HalEval, ProverImpl};
+    use super::{HalPair, ProverImpl, ProverServer};
     use crate::ProverOpts;
 
-    pub fn get_prover_impl(opts: &ProverOpts) -> Result<Rc<dyn DynProverImpl>> {
+    pub fn get_prover_server(opts: &ProverOpts) -> Result<Rc<dyn ProverServer>> {
         match opts.hashfn.as_str() {
             "sha-256" => {
                 let hal = Rc::new(CudaHalSha256::new());
-                let eval = Rc::new(CudaEvalCheckSha256::new(hal.clone()));
-                Ok(Rc::new(ProverImpl::new("cuda", HalEval { hal, eval })))
+                let circuit_hal = Rc::new(CudaCircuitHalSha256::new(hal.clone()));
+                Ok(Rc::new(ProverImpl::new(
+                    "cuda",
+                    HalPair { hal, circuit_hal },
+                )))
             }
             "poseidon" => {
                 let hal = Rc::new(CudaHalPoseidon::new());
-                let eval = Rc::new(CudaEvalCheckPoseidon::new(hal.clone()));
-                Ok(Rc::new(ProverImpl::new("cuda", HalEval { hal, eval })))
+                let circuit_hal = Rc::new(CudaCircuitHalPoseidon::new(hal.clone()));
+                Ok(Rc::new(ProverImpl::new(
+                    "cuda",
+                    HalPair { hal, circuit_hal },
+                )))
             }
             _ => bail!("Unsupported hashfn: {}", opts.hashfn),
         }
@@ -197,25 +187,31 @@ mod metal {
     use std::rc::Rc;
 
     use anyhow::{bail, Result};
-    use risc0_circuit_rv32im::metal::MetalEvalCheck;
+    use risc0_circuit_rv32im::metal::MetalCircuitHal;
     use risc0_zkp::hal::metal::{
         MetalHalPoseidon, MetalHalSha256, MetalHashPoseidon, MetalHashSha256,
     };
 
-    use super::{DynProverImpl, HalEval, ProverImpl};
+    use super::{HalPair, ProverImpl, ProverServer};
     use crate::ProverOpts;
 
-    pub fn get_prover_impl(opts: &ProverOpts) -> Result<Rc<dyn DynProverImpl>> {
+    pub fn get_prover_server(opts: &ProverOpts) -> Result<Rc<dyn ProverServer>> {
         match opts.hashfn.as_str() {
             "sha-256" => {
                 let hal = Rc::new(MetalHalSha256::new());
-                let eval = Rc::new(MetalEvalCheck::<MetalHashSha256>::new(hal.clone()));
-                Ok(Rc::new(ProverImpl::new("metal", HalEval { hal, eval })))
+                let circuit_hal = Rc::new(MetalCircuitHal::<MetalHashSha256>::new(hal.clone()));
+                Ok(Rc::new(ProverImpl::new(
+                    "metal",
+                    HalPair { hal, circuit_hal },
+                )))
             }
             "poseidon" => {
                 let hal = Rc::new(MetalHalPoseidon::new());
-                let eval = Rc::new(MetalEvalCheck::<MetalHashPoseidon>::new(hal.clone()));
-                Ok(Rc::new(ProverImpl::new("metal", HalEval { hal, eval })))
+                let circuit_hal = Rc::new(MetalCircuitHal::<MetalHashPoseidon>::new(hal.clone()));
+                Ok(Rc::new(ProverImpl::new(
+                    "metal",
+                    HalPair { hal, circuit_hal },
+                )))
             }
             _ => bail!("Unsupported hashfn: {}", opts.hashfn),
         }
@@ -227,31 +223,31 @@ mod cpu {
     use std::rc::Rc;
 
     use anyhow::{bail, Result};
-    use risc0_circuit_rv32im::cpu::CpuEvalCheck;
+    use risc0_circuit_rv32im::cpu::CpuCircuitHal;
     use risc0_zkp::{
         core::hash::{poseidon::PoseidonHashSuite, sha::Sha256HashSuite},
         hal::cpu::CpuHal,
     };
 
-    use super::{DynProverImpl, HalEval, ProverImpl};
+    use super::{HalPair, ProverImpl, ProverServer};
     use crate::{host::CIRCUIT, ProverOpts};
 
-    pub fn get_prover_impl(opts: &ProverOpts) -> Result<Rc<dyn DynProverImpl>> {
+    pub fn get_prover_server(opts: &ProverOpts) -> Result<Rc<dyn ProverServer>> {
         let suite = match opts.hashfn.as_str() {
             "sha-256" => Sha256HashSuite::new_suite(),
             "poseidon" => PoseidonHashSuite::new_suite(),
             _ => bail!("Unsupported hashfn: {}", opts.hashfn),
         };
         let hal = Rc::new(CpuHal::new(suite));
-        let eval = Rc::new(CpuEvalCheck::new(&CIRCUIT));
-        let hal_eval = HalEval { hal, eval };
-        Ok(Rc::new(ProverImpl::new("cpu", hal_eval)))
+        let circuit_hal = Rc::new(CpuCircuitHal::new(&CIRCUIT));
+        let hal_pair = HalPair { hal, circuit_hal };
+        Ok(Rc::new(ProverImpl::new("cpu", hal_pair)))
     }
 }
 
-/// Select a [DynProverImpl] based on the specified [ProverOpts] and currently
+/// Select a [ProverServer] based on the specified [ProverOpts] and currently
 /// compiled features.
-pub fn get_prover_impl(opts: &ProverOpts) -> Result<Rc<dyn DynProverImpl>> {
+pub fn get_prover_server(opts: &ProverOpts) -> Result<Rc<dyn ProverServer>> {
     if is_dev_mode() {
         eprintln!("WARNING: proving in dev mode. This will not generate valid, secure proofs.");
         return Ok(Rc::new(DevModeProver));
@@ -259,11 +255,11 @@ pub fn get_prover_impl(opts: &ProverOpts) -> Result<Rc<dyn DynProverImpl>> {
 
     cfg_if! {
         if #[cfg(feature = "cuda")] {
-            cuda::get_prover_impl(opts)
+            cuda::get_prover_server(opts)
         } else if #[cfg(feature = "metal")] {
-            metal::get_prover_impl(opts)
+            metal::get_prover_server(opts)
         } else {
-            cpu::get_prover_impl(opts)
+            cpu::get_prover_server(opts)
         }
     }
 }

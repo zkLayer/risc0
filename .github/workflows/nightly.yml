@@ -9,6 +9,9 @@ on:
         description: 'How many crates (sorted by downloads) to test'
         default: 100
 
+env:
+  RISC0_BUILD_LOCKED: 1
+
 jobs:
   crates_validate:
     runs-on: [self-hosted, prod, Linux, cpu]
@@ -26,6 +29,10 @@ jobs:
         run: echo "TOP_N_CRATES=${{ github.event.inputs.crate_count || env.DEFAULT_CRATE_COUNT }}" >> $GITHUB_ENV
 
       - run: cargo install --force --path risc0/cargo-risczero
+
+      - run: cargo run --bin cargo-risczero -- risczero install
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - run: cargo build --release
         working-directory: tools/crates-validator/

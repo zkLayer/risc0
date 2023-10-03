@@ -17,25 +17,26 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Cursor, Read, Write},
     rc::Rc,
 };
 
 use anyhow::Result;
 use bytemuck::Pod;
 use bytes::Bytes;
-use risc0_zkvm_platform::{self, fileno, syscall::SyscallName};
+use risc0_zkvm_platform::{self, fileno};
 
-use super::{exec::TraceEvent, posix_io::PosixIo};
+use super::{
+    exec::TraceEvent,
+    posix_io::PosixIo,
+    slice_io::{slice_io_from_fn, SliceIo, SliceIoTable},
+};
 
 /// A builder pattern used to construct an [ExecutorEnv].
 #[derive(Clone, Default)]
 pub struct ExecutorEnvBuilder<'a> {
     inner: ExecutorEnv<'a>,
 }
-
-/// A callback used for I/O.
-type IoCallback<'a> = dyn FnMut(Bytes) -> Result<Bytes> + 'a;
 
 /// A callback used to collect [TraceEvent]s.
 pub type TraceCallback<'a> = dyn FnMut(TraceEvent) -> Result<()> + 'a;
@@ -47,21 +48,13 @@ pub type TraceCallback<'a> = dyn FnMut(TraceEvent) -> Result<()> + 'a;
 #[derive(Clone, Default)]
 pub struct ExecutorEnv<'a> {
     pub(crate) env_vars: HashMap<String, String>,
-    pub(crate) segment_limit_po2: Option<usize>,
-    pub(crate) session_limit: Option<usize>,
+    pub(crate) args: Vec<String>,
+    pub(crate) segment_limit_po2: Option<u32>,
+    pub(crate) session_limit: Option<u64>,
     pub(crate) posix_io: Rc<RefCell<PosixIo<'a>>>,
-    pub(crate) slice_io: HashMap<String, SliceIo<'a>>,
+    pub(crate) slice_io: Rc<RefCell<SliceIoTable<'a>>>,
     pub(crate) input: Vec<u8>,
     pub(crate) trace: Option<Rc<RefCell<TraceCallback<'a>>>>,
-}
-
-/// An I/O handler that returns arbitrary data to the guest.
-///
-/// On the guest side, use `env::send_recv_slice`.
-#[derive(Clone)]
-pub(crate) struct SliceIo<'a> {
-    pub(crate) callback: Rc<RefCell<IoCallback<'a>>>,
-    pub(crate) stored_buf: RefCell<Option<Bytes>>,
 }
 
 impl<'a> ExecutorEnv<'a> {
@@ -90,14 +83,24 @@ impl<'a> ExecutorEnvBuilder<'a> {
     /// let env = ExecutorEnv::builder().build().unwrap();
     /// ```
     pub fn build(&mut self) -> Result<ExecutorEnv<'a>> {
-        Ok(self.inner.clone())
+        let inner = self.inner.clone();
+
+        if !inner.input.is_empty() {
+            let reader = Cursor::new(inner.input.clone());
+            inner
+                .posix_io
+                .borrow_mut()
+                .with_read_fd(fileno::STDIN, reader);
+        }
+
+        Ok(inner)
     }
 
     /// Set a segment limit, specified in powers of 2 cycles.
     ///
     /// Given value must be between [risc0_zkp::MIN_CYCLES_PO2] and
     /// [risc0_zkp::MAX_CYCLES_PO2] (inclusive).
-    pub fn segment_limit_po2(&mut self, limit: usize) -> &mut Self {
+    pub fn segment_limit_po2(&mut self, limit: u32) -> &mut Self {
         self.inner.segment_limit_po2 = Some(limit);
         self
     }
@@ -114,7 +117,7 @@ impl<'a> ExecutorEnvBuilder<'a> {
     ///     .build()
     ///     .unwrap();
     /// ```
-    pub fn session_limit(&mut self, limit: Option<usize>) -> &mut Self {
+    pub fn session_limit(&mut self, limit: Option<u64>) -> &mut Self {
         self.inner.session_limit = limit;
         self
     }
@@ -138,6 +141,22 @@ impl<'a> ExecutorEnvBuilder<'a> {
     /// ```
     pub fn env_vars(&mut self, vars: HashMap<String, String>) -> &mut Self {
         self.inner.env_vars = vars;
+        self
+    }
+
+    /// Add an argument array to the guest environment.
+    ///
+    /// # Example
+    /// ```
+    /// # use risc0_zkvm::ExecutorEnv;
+    ///
+    /// let env = ExecutorEnv::builder()
+    ///     .args(&["grep".to_string(), "-c".to_string(), "foo".to_string(), "-".to_string()])
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    pub fn args(&mut self, args: &[String]) -> &mut Self {
+        self.inner.args.extend_from_slice(args);
         self
     }
 
@@ -215,18 +234,24 @@ impl<'a> ExecutorEnvBuilder<'a> {
     }
 
     /// Add a handler for simple I/O handling.
-    pub fn io_callback(
+    pub fn slice_io(&mut self, channel: &str, handler: impl SliceIo + 'a) -> &mut Self {
+        self.inner
+            .slice_io
+            .borrow_mut()
+            .with_handler(channel, handler);
+        self
+    }
+
+    /// Add a handler for simple I/O handling.
+    pub fn io_callback<C: AsRef<str>>(
         &mut self,
-        channel: SyscallName,
+        channel: C,
         callback: impl Fn(Bytes) -> Result<Bytes> + 'a,
     ) -> &mut Self {
-        self.inner.slice_io.insert(
-            channel.as_str().to_string(),
-            SliceIo {
-                callback: Rc::new(RefCell::new(callback)),
-                stored_buf: RefCell::new(None),
-            },
-        );
+        self.inner
+            .slice_io
+            .borrow_mut()
+            .with_handler(channel.as_ref(), slice_io_from_fn(callback));
         self
     }
 
