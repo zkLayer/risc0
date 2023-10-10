@@ -144,7 +144,7 @@ pub struct ReceiptMetadata {
 /// [serde](crate::serde) module, which can be used to read data from the
 /// journal as the same type it was written to the journal. If you prefer, you
 /// can also directly access the [Receipt::journal] as a `Vec<u8>`.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Receipt {
     /// The polymorphic [InnerReceipt].
     pub inner: InnerReceipt,
@@ -158,7 +158,7 @@ pub struct Receipt {
 
 /// An inner receipt can take the form of a [SegmentReceipts] collection or a
 /// [SuccinctReceipt].
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub enum InnerReceipt {
     /// The [SegmentReceipts].
     Flat(SegmentReceipts),
@@ -171,7 +171,7 @@ pub enum InnerReceipt {
 }
 
 /// A wrapper around `Vec<SegmentReceipt>`.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct SegmentReceipts(pub Vec<SegmentReceipt>);
 
 impl SegmentReceipts {
