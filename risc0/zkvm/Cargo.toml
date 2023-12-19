@@ -51,6 +51,7 @@ serde = { version = "1.0", default-features = false, features = [
   "alloc",
   "derive",
 ] }
+tracing-flame = "0.2"
 
 # Host dependencies
 [target.'cfg(not(target_os = "zkvm"))'.dependencies]

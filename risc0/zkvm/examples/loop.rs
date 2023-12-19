@@ -24,6 +24,7 @@ use risc0_zkvm_methods::{
     bench::{BenchmarkSpec, SpecWithIters},
     BENCH_ELF,
 };
+use tracing_flame::FlameLayer;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 #[derive(serde::Serialize, Debug)]
@@ -61,9 +62,12 @@ struct Args {
 fn main() {
     let args = Args::parse();
     if let Some(iterations) = args.iterations {
+        let (flame_layer, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
         tracing_subscriber::registry()
             .with(EnvFilter::from_default_env())
             .with(tracing_forest::ForestLayer::default())
+            .with(tracing_subscriber::fmt::Layer::default())
+            .with(flame_layer.with_file_and_line(false).with_module_path(false).with_threads_collapsed(true))
             .init();
 
         let mut opts = ProverOpts::default();
@@ -112,6 +116,7 @@ fn main() {
                 );
             }
         }
+        drop(_guard);
     } else {
         if args.json {
             println!("[");

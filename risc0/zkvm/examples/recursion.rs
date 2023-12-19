@@ -16,12 +16,16 @@ use risc0_zkvm::{
     recursion::{poseidon_hal_pair, Prover, ProverOpts},
     sha::Digest,
 };
+use tracing_flame::FlameLayer;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 fn main() {
+    let (flame_layer, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
         .with(tracing_forest::ForestLayer::default())
+        .with(tracing_subscriber::fmt::Layer::default())
+        .with(flame_layer.with_file_and_line(false).with_module_path(false).with_threads_collapsed(true))
         .init();
 
     let hal_pair = poseidon_hal_pair();
@@ -34,4 +38,5 @@ fn main() {
         .unwrap()
         .run_with_hal(hal, circuit_hal)
         .expect("Running prover failed");
+    drop(_guard);
 }

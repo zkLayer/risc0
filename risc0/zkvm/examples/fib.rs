@@ -45,9 +45,12 @@ struct Metrics {
 }
 
 fn main() {
+    let (flame_layer, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
         .with(tracing_forest::ForestLayer::default())
+        .with(tracing_subscriber::fmt::Layer::default())
+        .with(flame_layer.with_file_and_line(false).with_module_path(false).with_threads_collapsed(true))
         .init();
 
     let args = Args::parse();
@@ -58,6 +61,7 @@ fn main() {
     let prover = get_prover_server(&opts).unwrap();
     let metrics = top(prover, args.iterations, args.skip_prover);
     println!("{metrics:?}");
+    drop(_guard);
 }
 
 #[tracing::instrument(skip_all)]
