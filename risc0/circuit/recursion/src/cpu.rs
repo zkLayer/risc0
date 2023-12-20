@@ -47,6 +47,7 @@ where
         Buffer<<H as Hal>::Elem> = CpuBuffer<BabyBearElem>,
     >,
 {
+    #[tracing::instrument(skip_all)]
     fn eval_check(
         &self,
         check: &H::Buffer<BabyBearElem>,
