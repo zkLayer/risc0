@@ -29,6 +29,13 @@ fn main() {
     )
     .unwrap();
 
+    // Verify that e has a known factorization.
+    env::verify(
+        MULTIPLY_ID,
+        bytemuck::cast_slice(&serde::to_vec(&e).unwrap()),
+    )
+    .unwrap();
+
     // Commit n, e, and x^e mod n.
     env::commit(&(n, e, pow_mod(x, e, n)));
 }

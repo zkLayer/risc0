@@ -18,16 +18,19 @@ use risc0_zkvm::{default_prover, ExecutorEnv};
 
 fn main() {
     // Pick two numbers and multiply them, with a receipt.
-    let (multiply_receipt, n) = multiply(17, 23);
+    let (multiply_receipt_n, n) = multiply(17, 23);
+
+    let (multiply_receipt_e, e) = multiply(3, 3);
 
     // Here is where one would send 'receipt' over the network to a second prover that might not
     // know the factors, but wants to do additional work with the proven composite number.
     let env = ExecutorEnv::builder()
         // add_assumption makes the receipt to be verified available to the prover.
-        .add_assumption(multiply_receipt.into())
+        .add_assumption(multiply_receipt_n.into())
+        .add_assumption(multiply_receipt_e.into())
         .write(&n)
         .unwrap()
-        .write(&9u64)
+        .write(&e)
         .unwrap()
         .write(&100u64)
         .unwrap()
