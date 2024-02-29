@@ -18,14 +18,23 @@ pragma solidity ^0.8.17;
 
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
-import {BonsaiRelay} from "bonsai/relay/BonsaiRelay.sol";
-import {BonsaiCheats} from "bonsai/BonsaiCheats.sol";
-import {ControlID, RiscZeroGroth16Verifier} from "bonsai/groth16/RiscZeroGroth16Verifier.sol";
-import {IRiscZeroVerifier} from "bonsai/IRiscZeroVerifier.sol";
 import {IVotes} from "openzeppelin/contracts/governance/utils/IVotes.sol";
+
+
+// import {BonsaiCheats} from "bonsai/BonsaiCheats.sol";
+// import {BonsaiRelay} from "bonsai/relay/BonsaiRelay.sol";
+// import {ControlID, RiscZeroGroth16Verifier} from "bonsai/groth16/RiscZeroGroth16Verifier.sol";
+// import {IRiscZeroVerifier} from "bonsai/IRiscZeroVerifier.sol";
 
 import {BonsaiGovernor} from "../contracts/BonsaiGovernor.sol";
 import {VoteToken} from "../contracts/VoteToken.sol";
+
+import {BonsaiRelay} from "risc0/relay/BonsaiRelay.sol";
+import {ControlID, RiscZeroGroth16Verifier} from "risc0/groth16/RiscZeroGroth16Verifier.sol";
+import {IRiscZeroVerifier} from "risc0/IRiscZeroVerifier.sol";
+import {RiscZeroCheats} from "risc0/RiscZeroCheats.sol";
+
+import {ImageID} from "../contracts/ImageID.sol";
 
 /// @notice deployment script for the Bonsai Governor and it's dependencies.
 /// @dev Use the following environment variables to control the deployment:
@@ -41,7 +50,8 @@ import {VoteToken} from "../contracts/VoteToken.sol";
 ///     * DEPLOY_VOTE_TOKEN_ADDRESS address of a predeployed IVotes contract.
 ///         If not specified, a new VoteToken contract will be deployed.
 ///         Note that the deployer address will be the owner of the VoteToken contract.
-contract Deploy is Script, BonsaiCheats {
+// contract Deploy is Script, BonsaiCheats {
+contract Deploy is Script, RiscZeroCheats {
     /// @notice use vm.startBroadcast to begin recording deploy transactions.
     function startBroadcast() internal {
         address deployerAddr = vm.envOr("DEPLOYER_ADDRESS", address(0));
@@ -101,9 +111,8 @@ contract Deploy is Script, BonsaiCheats {
         }
 
         // Deploy the BonsaiGovernor.
-        bytes32 imageId = queryImageId("FINALIZE_VOTES");
-        console2.log("Image ID for FINALIZE_VOTES is ", vm.toString(imageId));
-        BonsaiGovernor gov = new BonsaiGovernor(token, bonsaiRelay, imageId);
+        console2.log("Image ID for FINALIZE_VOTES is ", vm.toString(ImageID.FINALIZE_VOTES_ID));
+        BonsaiGovernor gov = new BonsaiGovernor(token, bonsaiRelay);
         console2.log("Deployed BonsaiGovernor to ", address(gov));
 
         vm.stopBroadcast();

@@ -25,8 +25,10 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {BytesLib} from "solidity-bytes-utils//BytesLib.sol";
 
-import {BonsaiTest} from "bonsai/BonsaiTest.sol";
-import {IBonsaiRelay, Callback, CallbackAuthorization} from "bonsai/relay/IBonsaiRelay.sol";
+import {IBonsaiRelay, Callback, CallbackAuthorization} from "risc0/relay/IBonsaiRelay.sol";
+import {BonsaiRelayTest} from "risc0/relay/BonsaiRelayTest.sol";
+import {IRiscZeroVerifier} from "risc0/IRiscZeroVerifier.sol";
+import {RiscZeroCheats} from "risc0/RiscZeroCheats.sol";
 
 import {BonsaiGovernor} from "../contracts/BonsaiGovernor.sol";
 import {BaselineGovernor} from "../contracts/BaselineGovernor.sol";
@@ -267,7 +269,7 @@ abstract contract BaselineGovernorTest is GovernorTest {
     }
 }
 
-abstract contract BonsaiGovernorTest is GovernorTest, BonsaiTest {
+abstract contract BonsaiGovernorTest is GovernorTest, BonsaiRelayTest {
     using BytesLib for bytes;
     using VoteLib for Vote;
 
@@ -310,7 +312,7 @@ abstract contract BonsaiGovernorTest is GovernorTest, BonsaiTest {
     }
 
     function governor(VoteToken token) internal override returns (IBonsaiGovernor) {
-        return new BonsaiGovernor(token, bonsaiRelay, imageId);
+        return new BonsaiGovernor(token, bonsaiRelay);
     }
 
     /// @notice collect the ballots and assemble zkVM guest input.

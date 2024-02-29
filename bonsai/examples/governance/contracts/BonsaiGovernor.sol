@@ -21,8 +21,10 @@ import {GovernorSettings} from "openzeppelin/contracts/governance/extensions/Gov
 import {GovernorVotes, IVotes} from "openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
 import {GovernorVotesQuorumFraction} from "openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFraction.sol";
 
-import {BonsaiLowLevelCallbackReceiver} from "bonsai/relay/BonsaiLowLevelCallbackReceiver.sol";
-import {IBonsaiRelay} from "bonsai/relay/IBonsaiRelay.sol";
+import {BonsaiLowLevelCallbackReceiver} from "risc0/relay/BonsaiLowLevelCallbackReceiver.sol";
+import {IBonsaiRelay} from "risc0/relay/IBonsaiRelay.sol";
+import {IRiscZeroVerifier} from "risc0/IRiscZeroVerifier.sol";
+import {ImageID} from "./ImageID.sol"; // auto-generated contract after running `cargo build`.
 
 import {BonsaiGovernorCounting} from "./BonsaiGovernorCounting.sol";
 import {IBonsaiGovernor} from "./IBonsaiGovernor.sol";
@@ -36,17 +38,19 @@ contract BonsaiGovernor is
     GovernorVotesQuorumFraction,
     BonsaiLowLevelCallbackReceiver
 {
-    /// @notice RISC Zero zkVM image ID for the vote finalization program.
-    bytes32 public immutable imageId;
+    /// @notice RISC Zero verifier contract address.
+    IRiscZeroVerifier public immutable verifier;
 
-    constructor(IVotes token_, IBonsaiRelay relay_, bytes32 imageId_)
+    /// @notice Image ID of the only zkVM binary to accept verification from.
+    bytes32 public constant imageId = ImageID.FINALIZE_VOTES_ID;
+
+    constructor(IVotes token_, IBonsaiRelay relay_)
         Governor("BonsaiGovernor")
         GovernorSettings(300, /* blocks */ 21000, /* blocks */ 0)
         GovernorVotes(token_)
         GovernorVotesQuorumFraction(20)
         BonsaiLowLevelCallbackReceiver(relay_)
     {
-        imageId = imageId_;
     }
 
     /**
