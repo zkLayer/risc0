@@ -97,7 +97,7 @@ For faster testing of the smart contracts without running tests against the smar
 TEST_USE_ZKVM=false forge test
 ```
 
-Additionally there are tests for the guest alone that can be run with.
+Additionally, there are tests for the guest alone that can be run with.
 
 ```bash
 cargo test

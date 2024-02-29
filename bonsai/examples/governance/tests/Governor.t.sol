@@ -32,6 +32,7 @@ import {BonsaiGovernor} from "../contracts/BonsaiGovernor.sol";
 import {BaselineGovernor} from "../contracts/BaselineGovernor.sol";
 import {IBonsaiGovernor} from "../contracts/IBonsaiGovernor.sol";
 import {VoteToken} from "../contracts/VoteToken.sol";
+import {ImageID} from "../contracts/ImageID.sol";
 
 /// @notice Voter to be included in a test scenario.
 contract Voter is Test {
@@ -297,7 +298,7 @@ abstract contract BonsaiGovernorTest is GovernorTest, BonsaiTest {
     function setUp() public withRelay {
         useZkvmGuest = vm.envOr("TEST_USE_ZKVM", true);
         if (useZkvmGuest) {
-            imageId = queryImageId("FINALIZE_VOTES");
+            imageId = ImageID.FINALIZE_VOTES_ID;
         }
 
         token = new VoteToken();
