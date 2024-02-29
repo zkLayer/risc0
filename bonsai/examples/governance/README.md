@@ -29,7 +29,7 @@ On a proposal with 1000 active voters, this saves voters and the DAO $4000-6000 
 
 One of the major advantages of RISC Zero is the simplicity of defining the zkVM program.
 Instead of complicated arithmetic circuits, which only experts in zero-knowledge cryptography can write and maintain, the zkVM program definition is 150 lines of Rust code.
-Check out `methods/guest/src/bin/finalize_votes.rs` to see the full definition of the zkVM program.
+Check out [`finalize_votes.rs`] to see the full definition of the zkVM program.
 
 Features currently in development can further decrease gas costs to make it possible to execute governance with L1 security, with only a fixed cost of ~300-400k gas per proposal, no matter how many votes. [^3]
 
@@ -110,7 +110,7 @@ Running `forge test` with the following environment variables will cause the sys
 The Bonsai proving service will produce a single STARK proof for the full computation, then compress the proof into a SNARK.
 The Bonsai relay service, run locally for the test, uploads this SNARK to authorize the callback to the Governance contract.
 
-***Note:*** *The Bonsai proving service is still in early Alpha. To request an API key [complete the form here](https://bonsai.xyz/apply).*
+***Note:*** *The Bonsai proving service is still in active development. To request an API key [complete the form here](https://bonsai.xyz/apply).*
 
 ```bash
 export BONSAI_API_KEY="YOUR_API_KEY" # see form linked above
@@ -122,3 +122,4 @@ RISC0_DEV_MODE=false forge test --match-contract BasicBonsaiGovernorTest
 [RISC Zero]: https://www.risczero.com/
 [OpenZeppelin Governor]: https://docs.openzeppelin.com/contracts/4.x/api/governance
 [Bonsai Foundry Template]: https://github.com/risc0/bonsai-foundry-template
+[`finalize_votes.rs`]: ./methods/guest/src/bin/finalize_votes.rs
