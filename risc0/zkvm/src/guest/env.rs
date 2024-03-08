@@ -39,7 +39,7 @@
 //! The zkVM provides functions that automatically perform (de)serialization on
 //! types and, for performance reasons, there is also a `_slice` variant that
 //! works with raw slices of plain old data. Performing operations on slices is
-//! more efficient, saving cycles during execution and consequently producing
+//! more efficient, saving cycles during execution and consequently generating
 //! smaller proofs that are faster to produce. However, the `_slice` variants
 //! can be less ergonomic, so consider trade-offs when choosing between the two.
 //! For more information about guest optimization, see RISC Zero's [instruction
@@ -52,7 +52,8 @@
 //! In order to access default file descriptors directly, see [stdin], [stdout],
 //! [stderr] and [journal]. These file descriptors are either [FdReader] or
 //! [FdWriter] instances, which can be used to read from or write to the host.
-//! To read from or write into them, use the [Read] and [Write] traits.
+//! To read from or write into them, use the [Read] and [Write] traits, or their
+//! convenience functions [read_fd] and [write_fd].
 //!
 //! WARNING: Specifying a file descriptor with the same value of a default file
 //! descriptor is not recommended and may lead to unexpected behavior. A list of
@@ -383,7 +384,7 @@ pub fn send_recv_slice<T: Pod, U: Pod>(syscall_name: SyscallName, to_host: &[T])
 /// [example page]: https://dev.risczero.com/api/zkvm/examples
 /// [I/O documentation]: https://dev.risczero.com/api/zkvm/tutorials/io
 pub fn read<T: DeserializeOwned>() -> T {
-    stdin().read()
+    read_fd(fileno::STDIN)
 }
 
 /// Read a slice from the STDIN of the zkVM.
@@ -413,7 +414,7 @@ pub fn read<T: DeserializeOwned>() -> T {
 /// [I/O documentation]: https://dev.risczero.com/api/zkvm/tutorials/io
 /// [instructions on guest optimization]: https://dev.risczero.com/api/zkvm/optimization#when-reading-data-as-raw-bytes-use-envread_slice
 pub fn read_slice<T: Pod>(slice: &mut [T]) {
-    stdin().read_slice(slice)
+    read_fd_slice(fileno::STDIN, slice)
 }
 
 /// Serialize the given data and write it to the STDOUT of the zkVM.
@@ -443,7 +444,7 @@ pub fn read_slice<T: Pod>(slice: &mut [T]) {
 /// [example page]: https://dev.risczero.com/api/zkvm/examples
 /// [I/O documentation]: https://dev.risczero.com/api/zkvm/tutorials/io
 pub fn write<T: Serialize>(data: &T) {
-    stdout().write(data)
+    write_fd(fileno::STDOUT, data)
 }
 
 /// Write the given slice to the STDOUT of the zkVM.
@@ -474,7 +475,7 @@ pub fn write<T: Serialize>(data: &T) {
 /// [I/O documentation]: https://dev.risczero.com/api/zkvm/tutorials/io
 /// [instructions on guest optimization]: https://dev.risczero.com/api/zkvm/optimization#when-reading-data-as-raw-bytes-use-envread_slice
 pub fn write_slice<T: Pod>(slice: &[T]) {
-    stdout().write_slice(slice);
+    write_fd_slice(fileno::STDOUT, slice)
 }
 
 /// Serialize the given data and commit it to the journal.
@@ -503,7 +504,7 @@ pub fn write_slice<T: Pod>(slice: &[T]) {
 /// [example page]: https://dev.risczero.com/api/zkvm/examples
 /// [I/O documentation]: https://dev.risczero.com/api/zkvm/tutorials/io
 pub fn commit<T: Serialize>(data: &T) {
-    journal().write(data)
+    write_fd(fileno::JOURNAL, data)
 }
 
 /// Commit the given slice to the journal.
@@ -533,7 +534,44 @@ pub fn commit<T: Serialize>(data: &T) {
 /// [I/O documentation]: https://dev.risczero.com/api/zkvm/tutorials/io
 /// [instructions on guest optimization]: https://dev.risczero.com/api/zkvm/optimization#when-reading-data-as-raw-bytes-use-envread_slice
 pub fn commit_slice<T: Pod>(slice: &[T]) {
-    journal().write_slice(slice);
+    write_fd_slice(fileno::JOURNAL, slice)
+}
+
+/// Read private data from a file descriptor and deserializes it.
+/// TODO:
+pub fn read_fd<T: DeserializeOwned>(fd: u32) -> T {
+    FdReader::new(fd).read()
+}
+
+/// Read private data as a slice from a file descriptor.
+/// TODO:
+pub fn read_fd_slice<T: Pod>(fd: u32, slice: &mut [T]) {
+    FdReader::new(fd).read_slice(slice)
+}
+
+/// Write the given data to a file descriptor.
+/// TODO:
+///
+/// # Safety
+///
+/// The [`journal`][fileno::JOURNAL] file descriptor needs to be treated in a
+/// special way. For this reason, specifying writes to it's numerical value will
+/// result in data being committed to the final proof, resulting in a public
+/// output. See [commit] for more information.
+/// TODO:
+pub fn write_fd<T: Serialize>(fd: u32, data: &T) {
+    match fd {
+        fileno::JOURNAL => journal().write(data),
+        _ => FdWriter::new(fd, |_| {}).write(data),
+    }
+}
+
+/// TODO
+pub fn write_fd_slice<T: Pod>(fd: u32, slice: &[T]) {
+    match fd {
+        fileno::JOURNAL => journal().write_slice(slice),
+        _ => FdWriter::new(fd, |_| {}).write_slice(slice),
+    }
 }
 
 /// Return the number of processor cycles that have occurred since the guest
@@ -704,8 +742,7 @@ pub struct FdWriter<F: Fn(&[u8])> {
 }
 
 impl<F: Fn(&[u8])> FdWriter<F> {
-    /// Creates a new FdWriter writing to the given file descriptor.
-    pub fn new(fd: u32, hook: F) -> Self {
+    fn new(fd: u32, hook: F) -> Self {
         FdWriter { fd, hook }
     }
 
