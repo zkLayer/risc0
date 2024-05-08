@@ -103,6 +103,7 @@ tempfile = "3"
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 
 [features]
+allocator = ["risc0-zkvm-platform/allocator"]
 client = [
   "dep:bincode",
   "dep:bonsai-sdk",

@@ -98,5 +98,34 @@ unsafe impl GlobalAlloc for BumpPointerAlloc {
     }
 }
 
+#[cfg(not(feature = "allocator"))]
 #[global_allocator]
 static HEAP: BumpPointerAlloc = BumpPointerAlloc;
+
+// This is a type alias for the enabled `restore-state-*` feature.
+// For example, it is `bool` if you enable `restore-state-bool`.
+#[cfg(feature = "allocator")]
+use critical_section::RawRestoreState;
+
+#[cfg(feature = "allocator")]
+struct MyCriticalSection;
+#[cfg(feature = "allocator")]
+critical_section::set_impl!(MyCriticalSection);
+
+#[cfg(feature = "allocator")]
+unsafe impl critical_section::Impl for MyCriticalSection {
+    unsafe fn acquire() -> RawRestoreState {
+        // this is a no-op. we're in a single-threaded, nonpreemptive context
+    }
+
+    unsafe fn release(token: RawRestoreState) {
+        // this is a no-op. we're in a single-threaded, nonpreemptive context
+    }
+}
+
+#[cfg(feature = "allocator")]
+use embedded_alloc::Heap;
+
+#[cfg(feature = "allocator")]
+#[global_allocator]
+pub static HEAP: Heap = Heap::empty();

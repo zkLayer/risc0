@@ -111,6 +111,25 @@ pub(crate) fn init() {
             MEMORY_IMAGE_ENTROPY.len(),
         )
     }
+
+    // Initialize the allocator BEFORE you use it
+    #[cfg(all(target_os = "zkvm", feature = "allocator"))]
+    {
+        #[cfg(target_os = "zkvm")]
+        extern "C" {
+            // This symbol is defined by the loader and marks the end
+            // of all elf sections, so this is where we start our
+            // heap.
+            //
+            // This is generated automatically by the linker; see
+            // https://lld.llvm.org/ELF/linker_script.html#sections-command
+            static _end: u8;
+        }
+        let heap_pos: usize = unsafe { (&_end) as *const u8 as usize };
+        let heap_size: usize = risc0_zkvm_platform::memory::GUEST_MAX_MEM - heap_pos;
+
+        unsafe { risc0_zkvm_platform::rust_rt::HEAP.init(heap_pos, heap_size) }
+    }
 }
 
 pub(crate) fn finalize(halt: bool, user_exit: u8) {

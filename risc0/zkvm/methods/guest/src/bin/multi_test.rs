@@ -246,7 +246,7 @@ fn main() {
             use core::hint::black_box;
             // SYSTEM memory starts above the guest memory so this is guaranteed
             // to be larger than the available heap:
-            let len = memory::SYSTEM.start() as usize;
+            let len = memory::GUEST_MAX_MEM * 2 as usize;
             let _data = black_box(vec![0_u8; len]);
         }
         MultiTestSpec::RsaCompat => {
