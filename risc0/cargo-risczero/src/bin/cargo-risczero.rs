@@ -29,6 +29,7 @@ fn main() -> Result<()> {
         RisczeroCmd::Build(cmd) => cmd.run(),
         RisczeroCmd::BuildToolchain(cmd) => cmd.run(),
         RisczeroCmd::Install(cmd) => cmd.run(),
+        RisczeroCmd::Bench(cmd) => cmd.run(),
         RisczeroCmd::New(cmd) => cmd.run(),
         RisczeroCmd::Deploy(cmd) => cmd.run(),
         RisczeroCmd::Verify(cmd) => cmd.run(),

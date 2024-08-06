@@ -14,6 +14,8 @@
 
 #[cfg(feature = "experimental")]
 pub mod build;
+
+pub mod bench;
 pub mod build_guest;
 pub mod build_toolchain;
 pub mod deploy;

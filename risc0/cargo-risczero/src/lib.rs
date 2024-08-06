@@ -29,8 +29,8 @@ use clap::{Parser, Subcommand};
 #[cfg(feature = "experimental")]
 use self::commands::build::BuildCommand;
 use self::commands::{
-    build_guest::BuildGuest, build_toolchain::BuildToolchain, deploy::DeployCommand,
-    install::Install, new::NewCommand, verify::VerifyCommand,
+    bench::BenchCommand, build_guest::BuildGuest, build_toolchain::BuildToolchain,
+    deploy::DeployCommand, install::Install, new::NewCommand, verify::VerifyCommand,
 };
 
 #[derive(Parser)]
@@ -59,6 +59,9 @@ pub enum RisczeroCmd {
     BuildToolchain(BuildToolchain),
     /// Install the riscv32im-risc0-zkvm-elf toolchain.
     Install(Install),
+    /// Benchmark local zkVM performance.
+    #[command(alias = "benchmark")]
+    Bench(BenchCommand),
     /// Creates a new risczero starter project.
     New(NewCommand),
     /// Uploads the guest code to Bonsai.
