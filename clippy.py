@@ -10,6 +10,7 @@ CRATES = [
     ("risc0-binfmt", None),
     ("risc0-build", None),
     ("risc0-build-kernel", None),
+    ("risc0-circuit-bigint", None),
     ("risc0-circuit-recursion", "default"),
     ("risc0-circuit-recursion-sys", "default"),
     ("risc0-circuit-rv32im", "default"),
